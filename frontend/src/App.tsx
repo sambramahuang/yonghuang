@@ -1,264 +1,228 @@
-import { AlertCircle, PlayCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, getToken, setToken } from "./api/client";
-import { STATUS_ORDER, SYSTEM_STATUS } from "./api/statusConfig";
-import type { ImpactSummary, RegulatoryUpdate, SystemStatus, User } from "./api/types";
-import ImpactCard from "./components/ImpactCard";
-import ImpactDetailView from "./components/ImpactDetailView";
-import LoginScreen from "./components/LoginScreen";
+import { ChevronDown, Terminal, UploadCloud } from "lucide-react";
+import { useMemo, useState } from "react";
+import ClientDropdown from "./components/ClientDropdown";
+import DocumentCard from "./components/DocumentCard";
+import DocumentViewer from "./components/DocumentViewer";
+import FilterBar from "./components/FilterBar";
+import Modal from "./components/Modal";
+import SearchBar from "./components/SearchBar";
+import UploadChangePanel from "./components/UploadChangePanel";
+import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments, setApproval } from "./lib/legalGraph";
+import { ROLE_LABEL, useRole, type Role } from "./lib/role";
+import { useSharedDocuments } from "./lib/sharedDocuments";
+import type { ChangeStatus, SortKey } from "./types";
 
 function Logo() {
   return (
-    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent shrink-0">
-      <line x1="16" y1="5" x2="16" y2="24" />
-      <line x1="6.5" y1="9" x2="25.5" y2="9" />
-      <path d="M7 9l-1 5.2M7 9l3 7.2M7 9l-0.4 9.4" strokeWidth="1.1" />
-      <circle cx="6" cy="14.2" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="10" cy="16.2" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="6.6" cy="18.4" r="1.5" fill="currentColor" stroke="none" />
-      <path d="M25 9l1 5.2M25 9l-3 7.2M25 9l0.4 9.4" strokeWidth="1.1" />
-      <circle cx="26" cy="14.2" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="22" cy="16.2" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="25.4" cy="18.4" r="1.5" fill="currentColor" stroke="none" />
-      <line x1="10" y1="27" x2="22" y2="27" />
-      <line x1="16" y1="24" x2="16" y2="27" />
-    </svg>
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white shadow-sm">
+      <svg width="18" height="18" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="16" y1="5" x2="16" y2="24" />
+        <line x1="6.5" y1="9" x2="25.5" y2="9" />
+        <path d="M7 9l-1 5.2M7 9l3 7.2M7 9l-0.4 9.4" strokeWidth="1.2" />
+        <circle cx="6" cy="14.2" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="10" cy="16.2" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="6.6" cy="18.4" r="1.4" fill="currentColor" stroke="none" />
+        <path d="M25 9l1 5.2M25 9l-3 7.2M25 9l0.4 9.4" strokeWidth="1.2" />
+        <circle cx="26" cy="14.2" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="22" cy="16.2" r="1.4" fill="currentColor" stroke="none" />
+        <circle cx="25.4" cy="18.4" r="1.4" fill="currentColor" stroke="none" />
+        <line x1="10" y1="27" x2="22" y2="27" />
+        <line x1="16" y1="24" x2="16" y2="27" />
+      </svg>
+    </div>
   );
 }
 
-const STATUSES: SystemStatus[] = [
-  "UPDATE_NEEDED",
-  "LEGAL_REVIEW_REQUIRED",
-  "POSSIBLE_IMPACT",
-  "CURRENT",
-];
+// The lawyer-facing app: search only. There is no upload affordance here —
+// in the real system, changes are routed in automatically by the firm's
+// horizon-scanning/scraping tool, never entered by hand at this screen.
+function LawyerApp() {
+  const [documents, setDocuments] = useSharedDocuments();
+  const [role, setRole] = useRole();
+  const canUpload = role === "senior_partner" || role === "dev";
+  const canApprove = role === "senior_partner";
 
-function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setTokenState] = useState(getToken());
-  const [updates, setUpdates] = useState<RegulatoryUpdate[]>([]);
-  const [updateId, setUpdateId] = useState<string>("");
-  const [impacts, setImpacts] = useState<ImpactSummary[]>([]);
-  const [statuses, setStatuses] = useState<SystemStatus[]>([]);
-  const [openOnly, setOpenOnly] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("relevance");
+  const [statuses, setStatuses] = useState<ChangeStatus[]>([]);
+  const [activeTypes, setActiveTypes] = useState<string[]>([]);
+  const [client, setClient] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!token) return;
-    try {
-      const [me, list] = await Promise.all([
-        api.me(),
-        api.impacts(updateId ? { update_id: updateId } : {}),
-      ]);
-      setUser(me);
-      setImpacts(list);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to load");
-      if (e instanceof ApiError && e.status === 401) setUser(null);
-    }
-  }, [token, updateId]);
+  const types = useMemo(() => getAllTypes(documents), [documents]);
+  const clients = useMemo(() => getAllClients(documents), [documents]);
 
-  useEffect(() => {
-    if (!token) return;
-    api
-      .regulatoryUpdates()
-      .then((u) => {
-        setUpdates(u);
-        setUpdateId((current) => current || (u[0] ? String(u[0].id) : ""));
-      })
-      .catch(() => {
-        /* surfaced by refresh() */
-      });
-  }, [token]);
+  const results = useMemo(
+    () => searchDocuments(documents, query, { statuses, types: activeTypes, client }, sortKey),
+    [documents, query, statuses, activeTypes, client, sortKey],
+  );
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const selected = results.find((d) => d.id === selectedId) ?? results[0] ?? null;
 
-  const visible = useMemo(() => {
-    const filtered = impacts.filter(
-      (i) =>
-        (statuses.length === 0 || statuses.includes(i.system_status)) &&
-        (!openOnly || (i.resolution === null && i.system_status !== "CURRENT")),
-    );
-    return [...filtered].sort(
-      (a, b) =>
-        STATUS_ORDER[b.system_status] - STATUS_ORDER[a.system_status] ||
-        a.name.localeCompare(b.name),
-    );
-  }, [impacts, statuses, openOnly]);
-
-  const selected = visible.find((i) => i.id === selectedId) ?? visible[0] ?? null;
-
-  const counts = useMemo(() => {
-    const by = {} as Record<SystemStatus, number>;
-    for (const s of STATUSES) by[s] = impacts.filter((i) => i.system_status === s).length;
-    return by;
-  }, [impacts]);
-
-  async function analyse() {
-    if (!updateId) return;
-    setBusy(true);
-    try {
-      await api.analyse(updateId);
-      await refresh();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Analysis failed");
-    } finally {
-      setBusy(false);
-    }
+  function toggleStatus(status: ChangeStatus) {
+    setStatuses((prev) => (prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]));
   }
 
-  function signOut() {
-    setToken("");
-    setTokenState("");
-    setUser(null);
+  function toggleType(type: string) {
+    setActiveTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
   }
 
-  if (!token) {
-    return (
-      <LoginScreen
-        onSignedIn={(signedIn) => {
-          setUser(signedIn);
-          setTokenState(getToken());
-        }}
-      />
-    );
+  function handleToggleApproval(documentId: string, clauseId: string, approved: boolean) {
+    setDocuments((prev) => setApproval(prev, documentId, clauseId, approved));
   }
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-end justify-between gap-3 px-6 py-5">
-          <div className="flex items-center gap-3.5">
+      <header className="bg-surface">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-5">
+          <div className="flex items-center gap-3">
             <Logo />
-            <div>
-              <h1 className="font-serif text-xl font-medium italic leading-none text-ink">RegGraph</h1>
-              <p className="mt-1.5 text-xs text-ink-faint">
-                Which of the firm's documents did this change break?
-              </p>
-            </div>
+            <h1 className="font-serif text-[21px] font-medium leading-none tracking-tight text-ink">RegGraph</h1>
           </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              value={updateId}
-              onChange={(e) => setUpdateId(e.target.value)}
-              className="rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink"
-            >
-              {updates.map((u) => (
-                <option key={String(u.id)} value={String(u.id)}>
-                  {u.title}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={analyse}
-              disabled={busy || !updateId}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-40"
-            >
-              <PlayCircle size={14} />
-              {busy ? "Analysing…" : "Analyse"}
-            </button>
-            <span className="rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-ink-soft">
-              {user ? `${user.name} · ${user.capability}` : "…"}
-            </span>
-            <button
-              type="button"
-              onClick={signOut}
-              className="rounded-lg border border-line px-2.5 py-1.5 text-sm text-ink-faint hover:text-ink"
-            >
-              Sign out
-            </button>
+          <div className="flex items-center gap-3">
+            <p className="hidden text-xs font-semibold uppercase tracking-wider text-ink-faint sm:block">
+              Read-only search
+            </p>
+            <div className="relative">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+                className="appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-9 text-xs font-medium text-ink hover:border-line-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
+              >
+                {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                strokeWidth={2.25}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint"
+              />
+            </div>
+            {canUpload && (
+              <button
+                type="button"
+                onClick={() => setShowUpload(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-paper shadow-sm hover:opacity-90"
+              >
+                <UploadCloud size={13} />
+                Upload change
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-6">
-        {error && (
-          <p className="mb-4 flex items-center gap-2 rounded-lg border border-bad-line bg-bad-bg p-3 text-sm text-bad">
-            <AlertCircle size={15} />
-            {error}
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <section className="mb-6">
+          <p className="text-xs font-bold uppercase tracking-wider text-brand">Search</p>
+          <h2 className="mt-3 max-w-3xl font-serif text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[60px]">
+            Every clause, traced across the firm.
+          </h2>
+          <p className="mt-4 max-w-xl text-base text-ink-soft">
+            Log a change once and every document citing the same authority lights up automatically.
           </p>
-        )}
+        </section>
 
-        <div className="rounded-xl border border-line bg-surface p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            {STATUSES.map((s) => {
-              const on = statuses.includes(s);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() =>
-                    setStatuses((prev) =>
-                      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
-                    )
-                  }
-                  className={`rounded-full border px-2.5 py-1 text-sm transition ${
-                    on
-                      ? `${SYSTEM_STATUS[s].bg} ${SYSTEM_STATUS[s].text} ${SYSTEM_STATUS[s].border}`
-                      : "border-line bg-surface-2 text-ink-faint hover:text-ink-soft"
-                  }`}
-                >
-                  {SYSTEM_STATUS[s].short}
-                  <span className="ml-1.5 font-mono text-[11px] opacity-70">{counts[s] ?? 0}</span>
-                </button>
-              );
-            })}
-            <label className="ml-auto flex items-center gap-1.5 text-sm text-ink-soft">
-              <input
-                type="checkbox"
-                checked={openOnly}
-                onChange={(e) => setOpenOnly(e.target.checked)}
-              />
-              Open findings only
-            </label>
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm">
+          <SearchBar query={query} onQueryChange={setQuery} sortKey={sortKey} onSortChange={setSortKey} />
+          <div className="mt-3 border-t border-line-soft pt-3">
+            <FilterBar
+              statuses={statuses}
+              onToggleStatus={toggleStatus}
+              types={types}
+              activeTypes={activeTypes}
+              onToggleType={toggleType}
+            />
           </div>
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr]">
           <div className="space-y-3">
-            <p className="font-mono text-[11px] tracking-wide text-ink-faint">
-              {visible.length} FINDING{visible.length !== 1 ? "S" : ""}
+            <ClientDropdown clients={clients} value={client} onChange={setClient} />
+            <p className="pt-1 font-mono text-[11px] tracking-wide text-ink-faint">
+              {results.length} DOCUMENT{results.length !== 1 ? "S" : ""}
             </p>
-            {visible.map((impact) => (
-              <ImpactCard
-                key={impact.id}
-                impact={impact}
-                active={selected?.id === impact.id}
-                onClick={() => setSelectedId(impact.id)}
+            {results.map((doc) => (
+              <DocumentCard
+                key={doc.id}
+                doc={doc}
+                documents={documents}
+                status={getEffectiveStatus(doc)}
+                active={selected?.id === doc.id}
+                onClick={() => setSelectedId(doc.id)}
               />
             ))}
-            {visible.length === 0 && (
+            {results.length === 0 && (
               <p className="rounded-lg border border-dashed border-line p-4 text-sm text-ink-faint">
-                No findings match these filters. Run Analyse to generate them.
+                No documents match this search and filter combination.
               </p>
             )}
           </div>
 
-          <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-160px)]">
+          <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-140px)]">
             {selected ? (
-              <ImpactDetailView
-                key={selected.id}
-                impactId={selected.id}
-                user={user}
-                onChanged={refresh}
+              <DocumentViewer
+                doc={selected}
+                documents={documents}
+                canApprove={canApprove}
+                onToggleApproval={handleToggleApproval}
               />
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-line text-sm text-ink-faint">
-                Select a finding to inspect its evidence
+                Select a document to view its clauses
               </div>
             )}
           </div>
         </div>
       </main>
+
+      {showUpload && canUpload && (
+        <Modal onClose={() => setShowUpload(false)} wide>
+          <UploadChangePanel documents={documents} onIngested={(res) => setDocuments(res.documents)} />
+        </Modal>
+      )}
     </div>
   );
+}
+
+// The ingestion console: stands in for the firm's automated scraping/
+// horizon-scanning pipeline. Deliberately not reachable from the lawyer app
+// — reached only at /ingest, e.g. from a separate machine for a demo.
+function IngestionConsole() {
+  const [documents, setDocuments] = useSharedDocuments();
+
+  return (
+    <div className="min-h-screen bg-paper">
+      <header className="border-b border-line bg-surface">
+        <div className="mx-auto flex max-w-7xl items-end justify-between gap-3 px-6 py-5">
+          <div className="flex items-center gap-3.5">
+            <Logo />
+            <div>
+              <h1 className="font-serif italic text-xl font-medium leading-none text-ink">RegGraph</h1>
+              <p className="mt-1.5 text-xs text-ink-faint">Ingestion console</p>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-seminal-line bg-seminal-bg px-3 py-1.5 text-xs font-semibold text-seminal">
+            <Terminal size={13} />
+            Internal tool — not shown to lawyers
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-6 py-6">
+        <UploadChangePanel documents={documents} onIngested={(res) => setDocuments(res.documents)} />
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/ingest" ? <IngestionConsole /> : <LawyerApp />;
 }
 
 export default App;

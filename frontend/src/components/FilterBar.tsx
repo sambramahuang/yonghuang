@@ -1,20 +1,15 @@
 import { STATUS_CONFIG } from "../statusConfig";
-import type { LegalStatus } from "../types";
+import type { ChangeStatus } from "../types";
 
 interface Props {
-  statuses: LegalStatus[];
-  onToggleStatus: (status: LegalStatus) => void;
+  statuses: ChangeStatus[];
+  onToggleStatus: (status: ChangeStatus) => void;
   types: string[];
   activeTypes: string[];
   onToggleType: (type: string) => void;
 }
 
-const ALL_STATUSES: LegalStatus[] = [
-  "good_law",
-  "overturned",
-  "in_progress",
-  "seminal_pending",
-];
+const ALL_STATUSES: ChangeStatus[] = ["change", "no_change", "uncertain"];
 
 export default function FilterBar({
   statuses,
@@ -32,7 +27,6 @@ export default function FilterBar({
         {ALL_STATUSES.map((status) => {
           const cfg = STATUS_CONFIG[status];
           const active = statuses.includes(status);
-          const Icon = cfg.icon;
           return (
             <button
               key={status}
@@ -44,7 +38,7 @@ export default function FilterBar({
                   : "border-line bg-surface text-ink-faint hover:border-line-soft"
               }`}
             >
-              <Icon size={12} strokeWidth={2.25} />
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cfg.dot}`} />
               {cfg.short}
             </button>
           );

@@ -1,29 +1,29 @@
-import { GitBranch, History } from "lucide-react";
-import { getBlastRadius, getChangedClauses } from "../lib/legalGraph";
+import { Link2 } from "lucide-react";
+import { getBlastRadiusForDocument, getChangedClauses } from "../lib/legalGraph";
 import { STATUS_CONFIG } from "../statusConfig";
-import type { LegalDocument, LegalStatus } from "../types";
+import type { ChangeStatus, FirmDocument } from "../types";
 import StatusBadge from "./StatusBadge";
 
 interface Props {
-  doc: LegalDocument;
-  status: LegalStatus;
+  doc: FirmDocument;
+  documents: FirmDocument[];
+  status: ChangeStatus;
   active: boolean;
   onClick: () => void;
 }
 
-export default function DocumentCard({ doc, status, active, onClick }: Props) {
+export default function DocumentCard({ doc, documents, status, active, onClick }: Props) {
   const cfg = STATUS_CONFIG[status];
   const changedCount = getChangedClauses(doc).length;
-  const blastRadius = getBlastRadius(doc).length;
-  const isAffected = changedCount > 0;
+  const blastRadius = getBlastRadiusForDocument(doc, documents).length;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl border-l-[3px] p-[18px] text-left transition ${cfg.border} ${
+      className={`w-full rounded-xl p-[18px] text-left transition ${
         active
-          ? `${cfg.bg} border shadow-md`
+          ? `${cfg.bg} shadow-md`
           : "border border-line bg-surface shadow-sm hover:shadow-md"
       }`}
     >
@@ -33,24 +33,22 @@ export default function DocumentCard({ doc, status, active, onClick }: Props) {
       </div>
       <p className="mt-1 font-mono text-xs text-ink-soft">{doc.citation}</p>
 
-      <p className="mt-2.5 line-clamp-2 text-[13px] leading-relaxed text-ink-soft">
-        {doc.summary}
-      </p>
-
-      <div className="mt-3.5 flex flex-wrap items-center gap-3.5 text-[11.5px]">
+      <div className="mt-3 flex flex-wrap items-center gap-3.5 text-[11.5px]">
         <span className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-medium text-ink-soft">
           {doc.type}
         </span>
+        <span className="rounded-md border border-line px-2 py-0.5 font-medium text-ink-soft">
+          {doc.client}
+        </span>
         <span className="text-ink-faint">Updated {doc.lastUpdated}</span>
-        {isAffected && (
-          <span className="inline-flex items-center gap-1 font-semibold text-warn">
-            <History size={11} /> {changedCount} clause
-            {changedCount > 1 ? "s" : ""} changed
+        {changedCount > 0 && (
+          <span className="font-semibold text-warn">
+            {changedCount} clause{changedCount > 1 ? "s" : ""} flagged
           </span>
         )}
         {blastRadius > 0 && (
-          <span className="inline-flex items-center gap-1 font-mono text-ink-soft">
-            <GitBranch size={12} /> Blast radius {blastRadius}
+          <span className="inline-flex items-center gap-1 font-semibold text-brand">
+            <Link2 size={12} /> Blast radius {blastRadius}
           </span>
         )}
       </div>

@@ -1,127 +1,86 @@
 import {
   STATUS_ORDER,
-  type AffectedDocRef,
-  type ChangeEvent,
-  type ChangeType,
+  type AuthorityType,
+  type ChangeStatus,
   type Clause,
-  type LegalDocument,
-  type LegalStatus,
+  type FirmDocType,
+  type FirmDocument,
   type SortKey,
+  type SuggestedChange,
 } from "../types";
 
-// This module stands in for the graph backend described in the problem
-// statement: documents/clauses are nodes, ChangeEvent.blastRadius entries
-// are edges. Every function here is a candidate to become a real graph
-// query (e.g. Cypher "MATCH (c:Clause)-[:AFFECTS]->(d:Document)") once the
-// backend exists — the UI already consumes data in that shape, and holds
-// no document state of its own (App owns the array; these are pure
-// functions over it), the same way a client would talk to a real graph API.
+// Stands in for the graph backend: documents/clauses are nodes. There is no
+// separate "affects" edge to maintain by hand — a clause's SuggestedChange
+// cites an Authority (a statute or case, as a plain string), and blast
+// radius is simply every OTHER document with a clause citing that same
+// authority. Log a change once against one document, and every sibling
+// citing the same authority lights up automatically — that's the whole
+// propagation mechanism.
 
 export function getDocumentById(
-  documents: LegalDocument[],
+  documents: FirmDocument[],
   id: string,
-): LegalDocument | undefined {
+): FirmDocument | undefined {
   return documents.find((d) => d.id === id);
 }
 
-export function getChangedClauses(doc: LegalDocument): Clause[] {
-  return doc.clauses.filter((c) => c.changeEvent);
+export function getChangedClauses(doc: FirmDocument): Clause[] {
+  return doc.clauses.filter((c) => c.change);
 }
 
-export function getBlastRadius(doc: LegalDocument): AffectedDocRef[] {
-  const seen = new Map<string, AffectedDocRef>();
-  for (const clause of doc.clauses) {
-    if (!clause.changeEvent) continue;
-    for (const ref of clause.changeEvent.blastRadius) {
-      if (!seen.has(ref.documentId)) seen.set(ref.documentId, ref);
+export interface BlastRadiusEntry {
+  document: FirmDocument;
+  clause: Clause;
+  change: SuggestedChange;
+}
+
+// Every other document with a clause citing the same authority as `change`.
+export function getBlastRadiusForChange(
+  change: SuggestedChange,
+  documents: FirmDocument[],
+  excludeDocumentId: string,
+): BlastRadiusEntry[] {
+  const entries: BlastRadiusEntry[] = [];
+  for (const doc of documents) {
+    if (doc.id === excludeDocumentId) continue;
+    for (const clause of doc.clauses) {
+      if (clause.change && clause.change.authority === change.authority) {
+        entries.push({ document: doc, clause, change: clause.change });
+      }
+    }
+  }
+  return entries;
+}
+
+// Union of blast radius across every changed/uncertain clause in the document.
+export function getBlastRadiusForDocument(
+  doc: FirmDocument,
+  documents: FirmDocument[],
+): FirmDocument[] {
+  const seen = new Map<string, FirmDocument>();
+  for (const clause of getChangedClauses(doc)) {
+    for (const entry of getBlastRadiusForChange(clause.change!, documents, doc.id)) {
+      seen.set(entry.document.id, entry.document);
     }
   }
   return [...seen.values()];
 }
 
-// A change ingested against one document doesn't need to rewrite every
-// downstream document it touches — it just needs to be findable from them.
-// This is the reverse of getBlastRadius: everywhere else in the graph that
-// named this document as affected.
-export interface IncomingImpact {
-  originDocumentId: string;
-  originDocumentTitle: string;
-  clauseId: string;
-  clauseHeading: string;
-  changeEvent: ChangeEvent;
-  relationship: string;
-}
-
-export function getIncomingImpacts(
-  doc: LegalDocument,
-  documents: LegalDocument[],
-): IncomingImpact[] {
-  const impacts: IncomingImpact[] = [];
-  for (const other of documents) {
-    if (other.id === doc.id) continue;
-    for (const clause of other.clauses) {
-      if (!clause.changeEvent) continue;
-      const ref = clause.changeEvent.blastRadius.find(
-        (r) => r.documentId === doc.id,
-      );
-      if (ref) {
-        impacts.push({
-          originDocumentId: other.id,
-          originDocumentTitle: other.title,
-          clauseId: clause.id,
-          clauseHeading: clause.heading,
-          changeEvent: clause.changeEvent,
-          relationship: ref.relationship,
-        });
-      }
-    }
-  }
-  return impacts;
-}
-
-function impliedStatus(type: ChangeType): LegalStatus {
-  switch (type) {
-    case "overturned":
-      return "overturned";
-    case "pending_appeal":
-      return "seminal_pending";
-    case "amendment":
-    case "judicial_reinterpretation":
-    case "regulatory_guidance":
-      return "in_progress";
-  }
-}
-
-// The whole point of tracking incoming impacts: a document's badge in
-// search results reflects changes ingested anywhere in the graph, not just
-// edits made directly to its own clauses.
-export function getEffectiveStatus(
-  doc: LegalDocument,
-  documents: LegalDocument[],
-): LegalStatus {
-  const clauseStatus = doc.clauses.reduce<LegalStatus>(
+export function getEffectiveStatus(doc: FirmDocument): ChangeStatus {
+  return doc.clauses.reduce<ChangeStatus>(
     (worst, c) => (STATUS_ORDER[c.status] > STATUS_ORDER[worst] ? c.status : worst),
-    "good_law",
+    "no_change",
   );
-  const incomingStatus = getIncomingImpacts(doc, documents).reduce<LegalStatus>(
-    (worst, impact) => {
-      const s = impliedStatus(impact.changeEvent.type);
-      return STATUS_ORDER[s] > STATUS_ORDER[worst] ? s : worst;
-    },
-    "good_law",
-  );
-  return STATUS_ORDER[incomingStatus] > STATUS_ORDER[clauseStatus]
-    ? incomingStatus
-    : clauseStatus;
 }
 
-function textMatches(doc: LegalDocument, query: string): boolean {
+function textMatches(doc: FirmDocument, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   const haystack = [
     doc.title,
     doc.citation,
     doc.summary,
+    doc.client,
     ...doc.practiceAreas,
     ...doc.clauses.map((c) => `${c.heading} ${c.text}`),
   ]
@@ -130,7 +89,7 @@ function textMatches(doc: LegalDocument, query: string): boolean {
   return haystack.includes(q);
 }
 
-function relevanceScore(doc: LegalDocument, query: string): number {
+function relevanceScore(doc: FirmDocument, query: string): number {
   const q = query.trim().toLowerCase();
   if (!q) return 0;
   let score = 0;
@@ -145,41 +104,40 @@ function relevanceScore(doc: LegalDocument, query: string): number {
 }
 
 export interface SearchFilters {
-  statuses: LegalStatus[]; // empty = all
+  statuses: ChangeStatus[]; // empty = all
   types: string[]; // empty = all
+  client: string; // "" = all clients
 }
 
 export function searchDocuments(
-  documents: LegalDocument[],
+  documents: FirmDocument[],
   query: string,
   filters: SearchFilters,
   sortKey: SortKey,
-): LegalDocument[] {
+): FirmDocument[] {
   let results = documents.filter((doc) => textMatches(doc, query));
 
   if (filters.statuses.length > 0) {
-    results = results.filter((doc) =>
-      filters.statuses.includes(getEffectiveStatus(doc, documents)),
-    );
+    results = results.filter((doc) => filters.statuses.includes(getEffectiveStatus(doc)));
   }
   if (filters.types.length > 0) {
     results = results.filter((doc) => filters.types.includes(doc.type));
+  }
+  if (filters.client) {
+    results = results.filter((doc) => doc.client === filters.client);
   }
 
   const withScore = results.map((doc) => ({
     doc,
     relevance: relevanceScore(doc, query),
-    blastRadius: getBlastRadius(doc).length,
-    status: getEffectiveStatus(doc, documents),
+    blastRadius: getBlastRadiusForDocument(doc, documents).length,
+    status: getEffectiveStatus(doc),
   }));
 
   withScore.sort((a, b) => {
     switch (sortKey) {
       case "lastUpdated":
-        return (
-          new Date(b.doc.lastUpdated).getTime() -
-          new Date(a.doc.lastUpdated).getTime()
-        );
+        return new Date(b.doc.lastUpdated).getTime() - new Date(a.doc.lastUpdated).getTime();
       case "blastRadius":
         return b.blastRadius - a.blastRadius;
       case "severity":
@@ -196,222 +154,135 @@ export function searchDocuments(
 
 export interface ChangeSummary {
   generatedAt: string;
-  overallRisk: LegalStatus;
+  overallStatus: ChangeStatus;
   totalBlastRadius: number;
-  bullets: { clauseHeading: string; changeEvent: ChangeEvent }[];
-  incomingImpacts: IncomingImpact[];
+  bullets: { clauseHeading: string; change: SuggestedChange; blastRadius: BlastRadiusEntry[] }[];
 }
 
-// Deterministically synthesises the "summarise changes in law" report from
-// the document's own change events plus anything upstream that has flagged
-// it, rather than calling out to an LLM — it demonstrates the feature
-// against data the graph backend would supply.
-export function summarizeChanges(
-  doc: LegalDocument,
-  documents: LegalDocument[],
-): ChangeSummary {
+export function summarizeChanges(doc: FirmDocument, documents: FirmDocument[]): ChangeSummary {
   const changed = getChangedClauses(doc);
-
   return {
     generatedAt: new Date().toISOString(),
-    overallRisk: getEffectiveStatus(doc, documents),
-    totalBlastRadius: getBlastRadius(doc).length,
+    overallStatus: getEffectiveStatus(doc),
+    totalBlastRadius: getBlastRadiusForDocument(doc, documents).length,
     bullets: changed.map((c) => ({
       clauseHeading: c.heading,
-      changeEvent: c.changeEvent!,
+      change: c.change!,
+      blastRadius: getBlastRadiusForChange(c.change!, documents, doc.id),
     })),
-    incomingImpacts: getIncomingImpacts(doc, documents),
   };
 }
 
-export interface GraphNode {
-  id: string;
+// Blast radius belongs to the authority (the case or statute), not to
+// whichever document you happen to be reading — a document is just one more
+// thing that cites it. So the graph is centered on the authority, with every
+// citing document (the one you're viewing included) as an equal node around
+// it. A document with several distinct changes gets one graph per authority,
+// rather than merging unrelated propagations into a single view.
+export interface ImpactGraphNode {
+  documentId: string;
   title: string;
   citation: string;
-  status: LegalStatus;
-  isCenter: boolean;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  relationship: string;
+  type: FirmDocType;
+  status: ChangeStatus;
+  isOrigin: boolean;
 }
 
 export interface ImpactGraph {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  authority: string;
+  authorityType: AuthorityType;
+  nodes: ImpactGraphNode[];
 }
 
-export function buildImpactGraph(
-  doc: LegalDocument,
-  documents: LegalDocument[],
-): ImpactGraph {
-  const blastRadius = getBlastRadius(doc);
-  const nodes: GraphNode[] = [
-    {
-      id: doc.id,
-      title: doc.title,
-      citation: doc.citation,
-      status: getEffectiveStatus(doc, documents),
-      isCenter: true,
-    },
-    ...blastRadius.map((ref) => {
-      const refDoc = getDocumentById(documents, ref.documentId);
-      return {
-        id: ref.documentId,
-        title: ref.title,
-        citation: ref.citation,
-        status: refDoc ? getEffectiveStatus(refDoc, documents) : "good_law",
-        isCenter: false,
-      };
-    }),
-  ];
+export function buildImpactGraphs(doc: FirmDocument, documents: FirmDocument[]): ImpactGraph[] {
+  const authorities = new Map<string, AuthorityType>();
+  for (const clause of getChangedClauses(doc)) {
+    if (clause.change) authorities.set(clause.change.authority, clause.change.authorityType);
+  }
 
-  const edges: GraphEdge[] = blastRadius.map((ref) => ({
-    source: doc.id,
-    target: ref.documentId,
-    relationship: ref.relationship,
-  }));
-
-  return { nodes, edges };
+  return [...authorities.entries()].map(([authority, authorityType]) => {
+    const citing = new Map<string, FirmDocument>();
+    for (const d of documents) {
+      if (d.clauses.some((c) => c.change?.authority === authority)) citing.set(d.id, d);
+    }
+    return {
+      authority,
+      authorityType,
+      nodes: [...citing.values()].map((d) => ({
+        documentId: d.id,
+        title: d.title,
+        citation: d.citation,
+        type: d.type,
+        status: getEffectiveStatus(d),
+        isOrigin: d.id === doc.id,
+      })),
+    };
+  });
 }
 
-export function getAllTypes(documents: LegalDocument[]): string[] {
+export function getCategoryBreakdown(docs: FirmDocument[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const d of docs) counts[d.type] = (counts[d.type] ?? 0) + 1;
+  return counts;
+}
+
+export function getAllTypes(documents: FirmDocument[]): string[] {
   return [...new Set(documents.map((d) => d.type))];
+}
+
+export function getAllClients(documents: FirmDocument[]): string[] {
+  return [...new Set(documents.map((d) => d.client))];
 }
 
 // --- Upload / ingestion pipeline -------------------------------------
 
-const STOPWORDS = new Set([
-  "about", "after", "again", "against", "amend", "amended", "amendment",
-  "before", "being", "between", "cannot", "could", "director", "during",
-  "either", "from", "have", "into", "material", "reasonable", "shall",
-  "should", "system", "systems", "that", "their", "them", "these", "this",
-  "those", "under", "unless", "where", "which", "while", "with", "would",
-]);
-
-function extractKeywords(text: string): string[] {
-  return [
-    ...new Set(
-      text
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w.length > 4 && !STOPWORDS.has(w)),
-    ),
-  ];
-}
-
-export interface DetectedImpact {
-  documentId: string;
-  title: string;
-  citation: string;
-  reason: string;
-  score: number;
-}
-
-// Simulates automatic ingestion: given the free text a lawyer just typed
-// describing a change, scan every other document in the corpus for shared
-// practice areas and overlapping vocabulary, and rank them as candidate
-// blast-radius targets. A real backend would do this with embeddings over
-// the graph; the shape of the result — a ranked, explainable candidate
-// list a human confirms — stays the same either way.
-export function detectAffectedDocuments(
-  documents: LegalDocument[],
-  originDocumentId: string,
-  summary: string,
-  detail: string,
-): DetectedImpact[] {
-  const origin = getDocumentById(documents, originDocumentId);
-  const keywords = extractKeywords(`${summary} ${detail}`);
-  const results: DetectedImpact[] = [];
-
-  for (const doc of documents) {
-    if (doc.id === originDocumentId) continue;
-    let score = 0;
-    const reasons: string[] = [];
-
-    if (origin) {
-      const sharedAreas = doc.practiceAreas.filter((a) =>
-        origin.practiceAreas.includes(a),
-      );
-      if (sharedAreas.length > 0) {
-        score += sharedAreas.length * 3;
-        reasons.push(`shares practice area: ${sharedAreas.join(", ")}`);
-      }
-    }
-
-    const haystack = `${doc.title} ${doc.summary} ${doc.clauses
-      .map((c) => `${c.heading} ${c.text}`)
-      .join(" ")}`.toLowerCase();
-    const matched = keywords.filter((k) => haystack.includes(k));
-    // A single incidental word overlap (e.g. both texts happen to say
-    // "require") isn't a real signal on its own — only count textual
-    // overlap once there's more than one matching term.
-    if (matched.length >= 2) {
-      score += matched.length * 2;
-      reasons.push(`matches "${matched.slice(0, 3).join('", "')}"`);
-    }
-
-    if (score > 0) {
-      results.push({
-        documentId: doc.id,
-        title: doc.title,
-        citation: doc.citation,
-        reason: reasons.join(" · "),
-        score,
-      });
-    }
-  }
-
-  return results.sort((a, b) => b.score - a.score).slice(0, 8);
-}
-
-function statusForChangeType(type: ChangeType): LegalStatus {
-  return impliedStatus(type);
-}
-
 export interface ChangeDraft {
   originDocumentId: string;
   originClauseId: string;
-  type: ChangeType;
+  status: Extract<ChangeStatus, "change" | "uncertain">;
+  authority: string;
+  authorityType: SuggestedChange["authorityType"];
   date: string;
-  source: string;
   summary: string;
   detail: string;
-  affected: AffectedDocRef[];
+  redlineBefore: string; // free text the lawyer pastes in; split into a single deleted/inserted pair
+  redlineAfter: string;
 }
 
 export interface IngestResult {
-  documents: LegalDocument[];
+  documents: FirmDocument[];
   originTitle: string;
   clauseHeading: string;
-  newStatus: LegalStatus;
+  newStatus: ChangeStatus;
   affectedCount: number;
 }
 
-// The lawyer's upload becomes one new ChangeEvent attached to the clause it
-// originates from. Nothing downstream is rewritten — every affected
-// document picks the change up the next time its status or impacts are
-// queried, via getEffectiveStatus / getIncomingImpacts above. That's the
-// "propagates automatically" part: propagation is a read, not a write.
-export function ingestChange(
-  documents: LegalDocument[],
-  draft: ChangeDraft,
-): IngestResult {
+// A change becomes exactly one new SuggestedChange on the origin clause.
+// Nothing else is rewritten — every document that already cites the same
+// authority picks the new sibling up next time blast radius is queried.
+export function ingestChange(documents: FirmDocument[], draft: ChangeDraft): IngestResult {
   const origin = getDocumentById(documents, draft.originDocumentId);
   const clause = origin?.clauses.find((c) => c.id === draft.originClauseId);
-  const newStatus = statusForChangeType(draft.type);
 
-  const changeEvent: ChangeEvent = {
-    id: `ce-upload-${Date.now()}`,
-    type: draft.type,
+  const change: SuggestedChange = {
+    id: `ch-upload-${Date.now()}`,
+    authority: draft.authority,
+    authorityType: draft.authorityType,
     date: draft.date,
-    source: draft.source,
     summary: draft.summary,
     detail: draft.detail,
-    blastRadius: draft.affected,
+    approved: false,
+    redline:
+      draft.status === "change" && (draft.redlineBefore || draft.redlineAfter)
+        ? ([
+            draft.redlineBefore
+              ? ({ kind: "deleted", text: draft.redlineBefore } as const)
+              : null,
+            draft.redlineAfter
+              ? ({ kind: "inserted", text: draft.redlineAfter } as const)
+              : null,
+          ].filter((s): s is NonNullable<typeof s> => s !== null))
+        : undefined,
   };
 
   const updatedDocuments = documents.map((doc) => {
@@ -420,16 +291,64 @@ export function ingestChange(
       ...doc,
       lastUpdated: draft.date,
       clauses: doc.clauses.map((c) =>
-        c.id === draft.originClauseId ? { ...c, status: newStatus, changeEvent } : c,
+        c.id === draft.originClauseId ? { ...c, status: draft.status, change } : c,
       ),
     };
   });
+
+  const affectedCount = getBlastRadiusForChange(change, updatedDocuments, draft.originDocumentId).length;
 
   return {
     documents: updatedDocuments,
     originTitle: origin?.title ?? draft.originDocumentId,
     clauseHeading: clause?.heading ?? draft.originClauseId,
-    newStatus,
-    affectedCount: draft.affected.length,
+    newStatus: draft.status,
+    affectedCount,
   };
+}
+
+// Toggle a suggested change between approved and unapproved — the "accept
+// suggestion" action in the Word-track-changes metaphor.
+export function setApproval(
+  documents: FirmDocument[],
+  documentId: string,
+  clauseId: string,
+  approved: boolean,
+): FirmDocument[] {
+  return documents.map((doc) => {
+    if (doc.id !== documentId) return doc;
+    return {
+      ...doc,
+      clauses: doc.clauses.map((c) =>
+        c.id === clauseId && c.change ? { ...c, change: { ...c.change, approved } } : c,
+      ),
+    };
+  });
+}
+
+// Documents already citing this authority — used by the upload flow to
+// detect affected documents deterministically instead of guessing by
+// keyword overlap.
+export function findDocumentsByAuthority(
+  documents: FirmDocument[],
+  authority: string,
+  excludeDocumentId?: string,
+): FirmDocument[] {
+  const q = authority.trim().toLowerCase();
+  if (!q) return [];
+  return documents.filter(
+    (doc) =>
+      doc.id !== excludeDocumentId &&
+      doc.clauses.some((c) => c.change?.authority.toLowerCase() === q),
+  );
+}
+
+export function getAllAuthorities(documents: FirmDocument[]): string[] {
+  const set = new Set<string>();
+  for (const doc of documents) {
+    for (const clause of doc.clauses) {
+      if (clause.change) set.add(clause.change.authority);
+    }
+  }
+  return [...set];
 }

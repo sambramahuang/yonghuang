@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -15,6 +15,9 @@
   --color-line: oklch(89% 0.007 264);
   --color-line-soft: oklch(94% 0.005 264);
   --color-accent: oklch(27% 0.03 264);
+
+  --color-brand: oklch(52% 0.18 258);
+  --color-brand-soft: oklch(94% 0.03 258);
 
   --color-good: oklch(52% 0.135 152);
   --color-good-bg: oklch(95.5% 0.03 152);
