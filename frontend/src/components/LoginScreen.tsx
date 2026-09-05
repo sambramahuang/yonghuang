@@ -30,6 +30,7 @@ export default function LoginScreen({ onSignedIn }: Props) {
     <div className="flex min-h-screen items-center justify-center bg-paper px-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
+          <img src="/panopticon.png" alt="Panopticon" className="mx-auto mb-3 h-12 w-12 object-contain" />
           <h1 className="font-serif text-2xl italic text-ink">Panopticon</h1>
           <p className="mt-1.5 text-sm text-ink-faint">Sign in to review regulatory impact</p>
         </div>

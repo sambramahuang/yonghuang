@@ -30,6 +30,7 @@ interface LawResult {
   changes_found: number;
   unmapped: { change_type: string; source_span: string }[];
   findings_created?: number;
+  deferred_until?: string | null;
   message?: string;
 }
 
@@ -124,7 +125,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
           )}
         </div>
         <h2 className="mt-5 font-serif text-2xl font-medium text-ink">
-          {noChanges ? "No mapped changes found" : "Change in law applied"}
+          {noChanges ? "No mapped changes found" : lawResult.deferred_until ? "Change logged, not yet in effect" : "Change in law applied"}
         </h2>
         {noChanges ? (
           <p className="mx-auto mt-3.5 max-w-sm text-sm leading-relaxed text-ink-soft">
@@ -137,11 +138,19 @@ export default function UploadChangePanel({ onIngested }: Props) {
               {lawResult.changes_found} change{lawResult.changes_found !== 1 ? "s" : ""}
               {!lawResult.created && " (already logged — this is the existing record)"}.
             </p>
-            <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-ink-soft">
-              <Gavel size={14} />
-              {lawResult.findings_created ?? 0} finding{lawResult.findings_created === 1 ? "" : "s"} created
-              across every document in the system that cites the affected concept.
-            </p>
+            {lawResult.deferred_until ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-ink-soft">
+                <Gavel size={14} />
+                This change takes effect on {lawResult.deferred_until} and hasn&rsquo;t been analysed against any
+                document yet — it will be actioned automatically once that date arrives.
+              </p>
+            ) : (
+              <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-ink-soft">
+                <Gavel size={14} />
+                {lawResult.findings_created ?? 0} finding{lawResult.findings_created === 1 ? "" : "s"} created
+                across every document in the system that cites the affected concept.
+              </p>
+            )}
           </>
         )}
         {lawResult.unmapped.length > 0 && (

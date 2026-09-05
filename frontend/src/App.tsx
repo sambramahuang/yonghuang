@@ -18,24 +18,7 @@ import type { ResolveAction } from "./components/DocumentPaper";
 import type { ChangeStatus, SortKey } from "./types";
 
 function Logo() {
-  return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white shadow-sm">
-      <svg width="18" height="18" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="16" y1="5" x2="16" y2="24" />
-        <line x1="6.5" y1="9" x2="25.5" y2="9" />
-        <path d="M7 9l-1 5.2M7 9l3 7.2M7 9l-0.4 9.4" strokeWidth="1.2" />
-        <circle cx="6" cy="14.2" r="1.4" fill="currentColor" stroke="none" />
-        <circle cx="10" cy="16.2" r="1.4" fill="currentColor" stroke="none" />
-        <circle cx="6.6" cy="18.4" r="1.4" fill="currentColor" stroke="none" />
-        <path d="M25 9l1 5.2M25 9l-3 7.2M25 9l0.4 9.4" strokeWidth="1.2" />
-        <circle cx="26" cy="14.2" r="1.4" fill="currentColor" stroke="none" />
-        <circle cx="22" cy="16.2" r="1.4" fill="currentColor" stroke="none" />
-        <circle cx="25.4" cy="18.4" r="1.4" fill="currentColor" stroke="none" />
-        <line x1="10" y1="27" x2="22" y2="27" />
-        <line x1="16" y1="24" x2="16" y2="27" />
-      </svg>
-    </div>
-  );
+  return <img src="/panopticon.png" alt="Panopticon" className="h-8 w-8 shrink-0 object-contain" />;
 }
 
 // The lawyer-facing app: search, plus a reviewer's affordance to add a firm

@@ -144,6 +144,7 @@ export const api = {
       update_id: string | null;
       title: string | null;
       effective_date?: string;
+      deferred_until?: string | null;
       changes_found: number;
       unmapped: { change_type: string; source_span: string }[];
       findings_created?: number;

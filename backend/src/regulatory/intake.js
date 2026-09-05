@@ -89,8 +89,18 @@ export async function intakeFromDocument(pool, { text, name, drafter, regulatory
     changes: extracted.changes,
   };
   const { id, created } = await intake(pool, payload);
-  const analysis = await analyse(pool, id, undefined, drafter);
+  // A change dated ahead of today is logged now and analysed later, on or
+  // after its own effective date — exactly the same rule a hand-written
+  // submission is held to. That is a legitimate outcome, not a failure.
+  let analysis = { created: 0, not_actioned: [], gaps: [] };
+  let deferredUntil = null;
+  try {
+    analysis = await analyse(pool, id, undefined, drafter);
+  } catch (e) {
+    if (e.status === 409 && /effective date/.test(e.message)) deferredUntil = payload.effective_date;
+    else throw e;
+  }
   return { created, update_id: id, title: payload.title, effective_date: payload.effective_date,
-    changes_found: extracted.changes.length, unmapped: extracted.unmapped,
+    changes_found: extracted.changes.length, unmapped: extracted.unmapped, deferred_until: deferredUntil,
     findings_created: analysis.created, not_actioned: analysis.not_actioned, gaps: analysis.gaps };
 }
