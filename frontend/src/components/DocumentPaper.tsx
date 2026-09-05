@@ -1,7 +1,7 @@
-import { BookOpen, Check, ChevronDown, FileText, GitBranch, Gavel, Undo2 } from "lucide-react";
+import { Check, ChevronDown, GitBranch, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { getBlastRadiusForChange, getCategoryBreakdown } from "../lib/legalGraph";
-import { AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
+import { AUTHORITY_ICON, AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
 import type { Clause, FirmDocument } from "../types";
 import Redline from "./Redline";
 
@@ -11,8 +11,6 @@ interface Props {
   canApprove: boolean;
   onToggleApproval: (clauseId: string, approved: boolean) => void;
 }
-
-const AUTHORITY_ICON = { statute: BookOpen, case: Gavel, guidance: FileText };
 
 // Real-world counterparty framing for the contract documents in the demo
 // corpus — cosmetic only, not part of the domain model. Documents that
@@ -164,7 +162,7 @@ export default function DocumentPaper({ doc, documents, canApprove, onToggleAppr
   });
 
   return (
-    <div className="mx-auto max-w-[680px] rounded-lg border border-line bg-surface px-14 py-12 font-serif shadow-sm">
+    <div className="mx-auto max-w-[880px] rounded-lg border border-line bg-surface px-16 py-12 font-serif shadow-sm">
       <div className="border-b border-line-soft pb-6 text-center">
         <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-ink-faint">{doc.citation}</p>
         <h2 className="mt-3 text-xl font-semibold uppercase tracking-wide text-ink">{mainTitle}</h2>

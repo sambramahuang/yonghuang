@@ -1,10 +1,20 @@
 import {
+  Bot,
+  BookOpen,
   CheckCircle2,
+  Copy,
   FilePenLine,
+  FileSignature,
+  FileText,
+  Gavel,
+  GraduationCap,
   HelpCircle,
+  ListChecks,
+  Megaphone,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
-import type { AuthorityType, ChangeStatus } from "./types";
+import type { AuthorityType, ChangeStatus, FirmDocType } from "./types";
 
 interface StatusConfig {
   label: string;
@@ -50,4 +60,53 @@ export const AUTHORITY_TYPE_LABEL: Record<AuthorityType, string> = {
   statute: "Statute",
   case: "Case law",
   guidance: "Regulatory guidance",
+};
+
+export const AUTHORITY_ICON: Record<AuthorityType, LucideIcon> = {
+  statute: BookOpen,
+  case: Gavel,
+  guidance: FileText,
+};
+
+export const DOC_TYPE_ICON: Record<FirmDocType, LucideIcon> = {
+  Contract: FileSignature,
+  "Template Clause": Copy,
+  Checklist: ListChecks,
+  Workflow: Workflow,
+  Playbook: BookOpen,
+  "Client Advisory": Megaphone,
+  "Training Material": GraduationCap,
+  "Automated Compliance Tool": Bot,
+};
+
+// The blast radius graph groups document types into two families: signed
+// instruments and reusable precedent on one side, everything advisory or
+// internal-process on the other — mirrors how a lawyer actually triages a
+// blast radius (what needs a redline vs. what just needs a heads-up).
+export type DocTypeGroup = "contract" | "advisory";
+
+export const DOC_TYPE_GROUP: Record<FirmDocType, DocTypeGroup> = {
+  Contract: "contract",
+  "Template Clause": "contract",
+  Checklist: "advisory",
+  Workflow: "advisory",
+  Playbook: "advisory",
+  "Client Advisory": "advisory",
+  "Training Material": "advisory",
+  "Automated Compliance Tool": "advisory",
+};
+
+export const DOC_TYPE_GROUP_CONFIG: Record<DocTypeGroup, { label: string; text: string; bg: string; border: string }> = {
+  contract: {
+    label: "Contract / Precedent",
+    text: "text-brand",
+    bg: "fill-brand-soft",
+    border: "stroke-brand",
+  },
+  advisory: {
+    label: "Internal / Advisory",
+    text: "text-seminal",
+    bg: "fill-seminal-bg",
+    border: "stroke-seminal",
+  },
 };

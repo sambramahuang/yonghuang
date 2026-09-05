@@ -7,7 +7,15 @@
 
 export type ChangeStatus = "no_change" | "change" | "uncertain";
 
-export type FirmDocType = "Tool" | "System" | "Practice" | "Contract";
+export type FirmDocType =
+  | "Contract"
+  | "Checklist"
+  | "Workflow"
+  | "Playbook"
+  | "Template Clause"
+  | "Client Advisory"
+  | "Training Material"
+  | "Automated Compliance Tool";
 
 export type AuthorityType = "statute" | "case" | "guidance";
 

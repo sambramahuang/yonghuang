@@ -1,4 +1,4 @@
-import { Terminal, UploadCloud } from "lucide-react";
+import { ChevronDown, Terminal, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
 import ClientDropdown from "./components/ClientDropdown";
 import DocumentCard from "./components/DocumentCard";
@@ -74,16 +74,21 @@ function LawyerApp() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-4">
+      <header className="bg-surface">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-5">
           <div className="flex items-center gap-3">
             <Logo />
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold leading-none text-ink">RegGraph</h1>
+            <h1 className="font-serif text-[21px] font-medium leading-none tracking-tight text-ink">RegGraph</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="hidden text-xs font-semibold uppercase tracking-wider text-ink-faint sm:block">
+              Read-only search
+            </p>
+            <div className="relative">
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as Role)}
-                className="rounded-md border-none bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
+                className="appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-9 text-xs font-medium text-ink hover:border-line-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
               >
                 {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
                   <option key={r} value={r}>
@@ -91,20 +96,22 @@ function LawyerApp() {
                   </option>
                 ))}
               </select>
+              <ChevronDown
+                size={14}
+                strokeWidth={2.25}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint"
+              />
             </div>
-          </div>
-          <div className="flex items-center gap-3">
             {canUpload && (
               <button
                 type="button"
                 onClick={() => setShowUpload(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-paper shadow-sm hover:opacity-90"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-paper shadow-sm hover:opacity-90"
               >
                 <UploadCloud size={13} />
                 Upload change
               </button>
             )}
-            <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Read-only search</p>
           </div>
         </div>
       </header>
@@ -112,17 +119,12 @@ function LawyerApp() {
       <main className="mx-auto max-w-7xl px-6 py-8">
         <section className="mb-6">
           <p className="text-xs font-bold uppercase tracking-wider text-brand">Search</p>
-          <h2 className="mt-2 max-w-2xl text-[28px] font-bold leading-[1.15] tracking-tight text-ink sm:text-[32px]">
+          <h2 className="mt-3 max-w-3xl font-serif text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[60px]">
             Every clause, traced across the firm.
           </h2>
-          <p className="mt-2 max-w-xl text-sm text-ink-soft">
+          <p className="mt-4 max-w-xl text-base text-ink-soft">
             Log a change once and every document citing the same authority lights up automatically.
           </p>
-          <div className="mt-6 flex items-center gap-2 text-ink-faint">
-            <span className="text-xs">+</span>
-            <div className="h-0 flex-1 border-t border-dashed border-line" />
-            <span className="text-xs">+</span>
-          </div>
         </section>
 
         <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm">

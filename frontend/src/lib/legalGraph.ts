@@ -1,7 +1,9 @@
 import {
   STATUS_ORDER,
+  type AuthorityType,
   type ChangeStatus,
   type Clause,
+  type FirmDocType,
   type FirmDocument,
   type SortKey,
   type SuggestedChange,
@@ -171,54 +173,51 @@ export function summarizeChanges(doc: FirmDocument, documents: FirmDocument[]): 
   };
 }
 
-export interface GraphNode {
-  id: string;
+// Blast radius belongs to the authority (the case or statute), not to
+// whichever document you happen to be reading — a document is just one more
+// thing that cites it. So the graph is centered on the authority, with every
+// citing document (the one you're viewing included) as an equal node around
+// it. A document with several distinct changes gets one graph per authority,
+// rather than merging unrelated propagations into a single view.
+export interface ImpactGraphNode {
+  documentId: string;
   title: string;
   citation: string;
+  type: FirmDocType;
   status: ChangeStatus;
-  isCenter: boolean;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  relationship: string;
+  isOrigin: boolean;
 }
 
 export interface ImpactGraph {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  authority: string;
+  authorityType: AuthorityType;
+  nodes: ImpactGraphNode[];
 }
 
-export function buildImpactGraph(doc: FirmDocument, documents: FirmDocument[]): ImpactGraph {
-  const siblings = getBlastRadiusForDocument(doc, documents);
-  const nodes: GraphNode[] = [
-    { id: doc.id, title: doc.title, citation: doc.citation, status: getEffectiveStatus(doc), isCenter: true },
-    ...siblings.map((d) => ({
-      id: d.id,
-      title: d.title,
-      citation: d.citation,
-      status: getEffectiveStatus(d),
-      isCenter: false,
-    })),
-  ];
-
-  const edges: GraphEdge[] = [];
-  const edgeSeen = new Set<string>();
+export function buildImpactGraphs(doc: FirmDocument, documents: FirmDocument[]): ImpactGraph[] {
+  const authorities = new Map<string, AuthorityType>();
   for (const clause of getChangedClauses(doc)) {
-    for (const entry of getBlastRadiusForChange(clause.change!, documents, doc.id)) {
-      const key = entry.document.id;
-      if (edgeSeen.has(key)) continue;
-      edgeSeen.add(key);
-      edges.push({
-        source: doc.id,
-        target: entry.document.id,
-        relationship: `shares authority: ${clause.change!.authority}`,
-      });
-    }
+    if (clause.change) authorities.set(clause.change.authority, clause.change.authorityType);
   }
 
-  return { nodes, edges };
+  return [...authorities.entries()].map(([authority, authorityType]) => {
+    const citing = new Map<string, FirmDocument>();
+    for (const d of documents) {
+      if (d.clauses.some((c) => c.change?.authority === authority)) citing.set(d.id, d);
+    }
+    return {
+      authority,
+      authorityType,
+      nodes: [...citing.values()].map((d) => ({
+        documentId: d.id,
+        title: d.title,
+        citation: d.citation,
+        type: d.type,
+        status: getEffectiveStatus(d),
+        isOrigin: d.id === doc.id,
+      })),
+    };
+  });
 }
 
 export function getCategoryBreakdown(docs: FirmDocument[]): Record<string, number> {
