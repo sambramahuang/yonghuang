@@ -4,6 +4,7 @@ import ClientDropdown from "./components/ClientDropdown";
 import DocumentCard from "./components/DocumentCard";
 import DocumentViewer from "./components/DocumentViewer";
 import FilterBar from "./components/FilterBar";
+import HexBackground from "./components/HexBackground";
 import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
@@ -143,7 +144,8 @@ function LawyerApp() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <header className="bg-surface">
+      <HexBackground />
+      <header className="relative z-10 bg-surface/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-5">
           <div className="flex items-center gap-3">
             <Logo />
@@ -192,7 +194,7 @@ function LawyerApp() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="relative z-10 mx-auto max-w-7xl px-6 py-8">
         {banner && (
           <p role="alert" className="mb-4 rounded-lg border border-bad-line bg-bad-bg p-3 text-sm text-bad">
             {banner}
@@ -200,12 +202,9 @@ function LawyerApp() {
         )}
         <section className="mb-6">
           <p className="text-xs font-bold uppercase tracking-wider text-brand">Search</p>
-          <h2 className="mt-3 max-w-3xl font-serif text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[60px]">
+          <h2 className="mt-3 whitespace-nowrap font-serif text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[60px]">
             Every clause, traced across the firm.
           </h2>
-          <p className="mt-4 max-w-xl text-base text-ink-soft">
-            Log a change once and every document citing the same authority lights up automatically.
-          </p>
         </section>
 
         <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm">

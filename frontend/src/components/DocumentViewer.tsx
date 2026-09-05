@@ -1,9 +1,8 @@
-import { Download, GitBranch, Maximize2, Minimize2, Sparkles } from "lucide-react";
+import { GitBranch, Maximize2, Minimize2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import {
   buildImpactGraphs,
   getBlastRadiusForDocument,
-  getChangedClauses,
   getEffectiveStatus,
   summarizeChanges,
 } from "../lib/legalGraph";
@@ -36,32 +35,7 @@ export default function DocumentViewer({
   const [expanded, setExpanded] = useState(false);
 
   const status = getEffectiveStatus(doc);
-  const changedCount = getChangedClauses(doc).length;
   const blastRadius = getBlastRadiusForDocument(doc, documents);
-
-  function handleExport() {
-    const summary = summarizeChanges(doc, documents);
-    const payload = {
-      document: { id: doc.id, title: doc.title, citation: doc.citation, client: doc.client, type: doc.type },
-      exportedAt: new Date().toISOString(),
-      overallStatus: summary.overallStatus,
-      blastRadius: blastRadius.map((d) => ({ id: d.id, title: d.title, type: d.type })),
-      changes: summary.bullets.map((b) => ({
-        clause: b.clauseHeading,
-        authority: b.change.authority,
-        status: b.change.resolution ?? "open",
-        summary: b.change.summary,
-        detail: b.change.detail,
-      })),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${doc.id}-compliance-alert.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 
   return (
     <>
@@ -123,15 +97,6 @@ export default function DocumentViewer({
                   {blastRadius.length}
                 </span>
               )}
-            </button>
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={changedCount === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Download size={13} />
-              Export compliance alert
             </button>
           </div>
         </div>

@@ -1,6 +1,5 @@
 import { Link2 } from "lucide-react";
 import { getBlastRadiusForDocument, getChangedClauses } from "../lib/legalGraph";
-import { STATUS_CONFIG } from "../statusConfig";
 import type { ChangeStatus, FirmDocument } from "../types";
 import StatusBadge from "./StatusBadge";
 
@@ -13,7 +12,6 @@ interface Props {
 }
 
 export default function DocumentCard({ doc, documents, status, active, onClick }: Props) {
-  const cfg = STATUS_CONFIG[status];
   const changedCount = getChangedClauses(doc).length;
   const blastRadius = getBlastRadiusForDocument(doc, documents).length;
 
@@ -21,10 +19,8 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
     <button
       type="button"
       onClick={onClick}
-      className={`w-full min-w-0 overflow-hidden rounded-xl p-[18px] text-left transition ${
-        active
-          ? `${cfg.bg} shadow-md`
-          : "border border-line bg-surface shadow-sm hover:shadow-md"
+      className={`w-full min-w-0 overflow-hidden rounded-xl border bg-surface p-[18px] text-left shadow-sm transition ${
+        active ? "border-brand shadow-md" : "border-line hover:shadow-md"
       }`}
     >
       <div className="flex min-w-0 items-start justify-between gap-2.5">
@@ -40,7 +36,7 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
           rather than drifting as the metadata chips above it wrap. */}
       <div className="mt-2 flex items-center gap-3.5 text-[11.5px]">
         {changedCount > 0 ? (
-          <span className="font-semibold text-warn">
+          <span className="font-semibold text-brand">
             {changedCount} clause{changedCount > 1 ? "s" : ""} flagged
           </span>
         ) : (
