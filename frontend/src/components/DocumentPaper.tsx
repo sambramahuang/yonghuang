@@ -165,7 +165,7 @@ export default function DocumentPaper({ doc, documents, canApprove, onToggleAppr
     <div className="mx-auto max-w-[880px] rounded-lg border border-line bg-surface px-16 py-12 font-serif shadow-sm">
       <div className="border-b border-line-soft pb-6 text-center">
         <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-ink-faint">{doc.citation}</p>
-        <h2 className="mt-3 text-xl font-semibold uppercase tracking-wide text-ink">{mainTitle}</h2>
+        <h2 className="mt-3 break-words text-xl font-semibold uppercase tracking-wide text-ink">{mainTitle}</h2>
         {isContract && !isExecuted && meta && (
           <p className="mt-2 font-sans text-xs text-ink-faint">Template — prepared for {doc.client}</p>
         )}

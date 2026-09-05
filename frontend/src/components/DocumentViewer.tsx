@@ -71,7 +71,7 @@ export default function DocumentViewer({ doc, documents, canApprove, onToggleApp
               <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                 {doc.type} · {doc.client}
               </p>
-              <h2 className="mt-1 text-[19px] font-bold leading-snug tracking-tight text-ink">
+              <h2 className="mt-1 break-words text-[19px] font-bold leading-snug tracking-tight text-ink">
                 {doc.title}
               </h2>
               <p className="mt-1 font-mono text-[11.5px] text-ink-soft">{doc.citation}</p>

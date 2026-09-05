@@ -21,17 +21,19 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl p-[18px] text-left transition ${
+      className={`w-full min-w-0 overflow-hidden rounded-xl p-[18px] text-left transition ${
         active
           ? `${cfg.bg} shadow-md`
           : "border border-line bg-surface shadow-sm hover:shadow-md"
       }`}
     >
-      <div className="flex items-start justify-between gap-2.5">
-        <p className="text-[15px] font-semibold leading-snug text-ink">{doc.title}</p>
-        <StatusBadge status={status} size="sm" />
+      <div className="flex min-w-0 items-start justify-between gap-2.5">
+        <p className="min-w-0 break-words text-[15px] font-semibold leading-snug text-ink">{doc.title}</p>
+        <span className="shrink-0">
+          <StatusBadge status={status} size="sm" />
+        </span>
       </div>
-      <p className="mt-1 font-mono text-xs text-ink-soft">{doc.citation}</p>
+      <p className="mt-1 break-words font-mono text-xs text-ink-soft">{doc.citation}</p>
 
       <div className="mt-3 flex flex-wrap items-center gap-3.5 text-[11.5px]">
         <span className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-medium text-ink-soft">
