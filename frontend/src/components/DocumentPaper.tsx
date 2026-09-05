@@ -89,10 +89,11 @@ function PaperClause({
   return (
     <div className={change ? `border-l-2 ${cfg.border} -ml-4 pl-[14px]` : ""}>
       <p className="text-justify text-[16px] leading-[1.9] text-ink">
-        <span className="font-semibold">
-          {number && `${number}. `}
-          {title}.{" "}
-        </span>
+        {number && (
+          <span className="font-semibold">
+            {number}. {title}.{" "}
+          </span>
+        )}
         {clause.status === "change" && change?.redline ? (
           <Redline segments={change.redline} approved={change.approved} />
         ) : (
