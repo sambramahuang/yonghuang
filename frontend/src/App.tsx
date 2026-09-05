@@ -145,7 +145,7 @@ function LawyerApp() {
   return (
     <div className="min-h-screen bg-paper">
       <HexBackground />
-      <header className="relative z-10 bg-surface/95 backdrop-blur-sm">
+      <header className="relative z-10">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-5">
           <div className="flex items-center gap-3">
             <Logo />
@@ -155,30 +155,32 @@ function LawyerApp() {
             <p className="hidden text-xs font-semibold uppercase tracking-wider text-ink-faint sm:block">
               Read-only search
             </p>
-            <div className="relative">
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-                className="appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-9 text-xs font-medium text-ink hover:border-line-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
-              >
-                {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as Role)}
+                  className="appearance-none border-none bg-transparent py-2 pl-0 pr-5 text-xs font-medium text-ink hover:text-ink-soft focus:outline-none"
+                >
+                  {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABEL[r]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  strokeWidth={2.25}
+                  className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-ink-faint"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
-                className="ml-2 rounded-lg border border-line px-2.5 py-1.5 text-sm text-ink-faint hover:text-ink"
+                className="rounded-lg border border-line px-2.5 py-1.5 text-sm text-ink-faint hover:text-ink"
               >
                 Sign out{user ? ` (${user.capability})` : ""}
               </button>
-              <ChevronDown
-                size={14}
-                strokeWidth={2.25}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint"
-              />
             </div>
             {canUpload && (
               <button
@@ -243,7 +245,7 @@ function LawyerApp() {
             )}
           </div>
 
-          <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-140px)]">
+          <div className="lg:sticky lg:top-3 lg:h-[calc(100vh-48px)]">
             {selected ? (
               <DocumentViewer
                 doc={selected}

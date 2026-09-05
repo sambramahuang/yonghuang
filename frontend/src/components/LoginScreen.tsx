@@ -39,7 +39,7 @@ export default function LoginScreen({ onSignedIn }: Props) {
             e.preventDefault();
             void signIn(username, password);
           }}
-          className="rounded-xl border border-line bg-surface p-5 shadow-sm"
+          className="rounded-xl border border-line bg-transparent p-5"
         >
           <label className="block text-sm font-medium text-ink-soft" htmlFor="username">
             Username
