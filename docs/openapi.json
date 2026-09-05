@@ -1,0 +1,2264 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Yonghuang regulatory impact API",
+    "version": "0.1.0",
+    "description": "Local demo backend. UTF-16 evidence offsets; signed bearer tokens; separate reviewer/approver workflow."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:3001/api"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Check backend health and extraction mode",
+        "operationId": "get__health",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Get active account",
+        "operationId": "get__me",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List seeded accounts",
+        "operationId": "get__users",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artefacts": {
+      "get": {
+        "summary": "List imported artefacts",
+        "operationId": "get__artefacts",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Artefact"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Upload and extract a DOCX or JSON artefact",
+        "operationId": "post__artefacts",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "handbook",
+                      "template",
+                      "faq",
+                      "config",
+                      "training"
+                    ]
+                  }
+                },
+                "required": [
+                  "file",
+                  "type"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artefacts/{id}": {
+      "get": {
+        "summary": "Get current content and versioned original evidence",
+        "operationId": "get__artefacts_id_",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtefactDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/artefacts/{id}/download": {
+      "get": {
+        "summary": "Download current JSON or normalized text",
+        "operationId": "get__artefacts_id_download",
+        "responses": {
+          "200": {
+            "description": "File attachment; DOCX imports download as .txt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/regulatory-updates": {
+      "get": {
+        "summary": "List updates",
+        "operationId": "get__regulatory_updates",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Update"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Receive a structured update idempotently",
+        "operationId": "post__regulatory_updates",
+        "responses": {
+          "200": {
+            "description": "Identical provider_ref replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegulatoryPayload"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/regulatory-updates/{id}": {
+      "get": {
+        "summary": "Get update and changes",
+        "operationId": "get__regulatory_updates_id_",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/regulatory-updates/{id}/analyse": {
+      "post": {
+        "summary": "Analyse effective update and return new-finding count, historical suppressions and gaps",
+        "operationId": "post__regulatory_updates_id_analyse",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Analysis"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/impacts": {
+      "get": {
+        "summary": "List findings",
+        "operationId": "get__impacts",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ImpactListItem"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "update_id",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CURRENT",
+                "UPDATE_NEEDED",
+                "POSSIBLE_IMPACT",
+                "LEGAL_REVIEW_REQUIRED"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "open",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    "/impacts/{id}": {
+      "get": {
+        "summary": "Get both evidence sources and audit",
+        "operationId": "get__impacts_id_",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactDetail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ]
+      }
+    },
+    "/impacts/{id}/patch": {
+      "patch": {
+        "summary": "Edit numeric replacement; invalidates prior submission",
+        "operationId": "patch__impacts_id_patch",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Impact"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/impacts/{id}/submit": {
+      "post": {
+        "summary": "Submit patch for separate approval",
+        "operationId": "post__impacts_id_submit",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Impact"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Revision"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/impacts/{id}/approve": {
+      "post": {
+        "summary": "APPROVER: approve another user's submission",
+        "operationId": "post__impacts_id_approve",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Revision"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/impacts/{id}/reject": {
+      "post": {
+        "summary": "APPROVER: reject a finding without changing content",
+        "operationId": "post__impacts_id_reject",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Impact"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reject"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/impacts/{id}/escalate": {
+      "post": {
+        "summary": "Escalate a finding for counsel",
+        "operationId": "post__impacts_id_escalate",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Impact"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Escalate"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Eight-hour token issued by npm run token -- reviewer|approver"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "REVIEWER",
+              "APPROVER"
+            ]
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "extraction_mode": {
+            "type": "string",
+            "enum": [
+              "fixture",
+              "live"
+            ]
+          }
+        }
+      },
+      "Patch": {
+        "type": "object",
+        "properties": {
+          "old": {
+            "type": "string"
+          },
+          "new": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer"
+          },
+          "end": {
+            "type": "integer"
+          },
+          "base_version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "required": [
+          "old",
+          "new",
+          "start",
+          "end",
+          "base_version_id"
+        ]
+      },
+      "Version": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "artefact_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "raw_text": {
+            "type": "string"
+          },
+          "supersedes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "SUPERSEDED"
+            ]
+          },
+          "created_by": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Segment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "locator": {
+            "type": "string"
+          },
+          "char_start": {
+            "type": "integer"
+          },
+          "char_end": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          },
+          "value_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_confidence": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "LOW"
+            ]
+          },
+          "extraction_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Rule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "segment_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "concept": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modality": {
+            "type": "string",
+            "enum": [
+              "IS",
+              "MUST",
+              "MUST_NOT",
+              "MAY"
+            ]
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "=",
+                  ">=",
+                  "<=",
+                  ">",
+                  "<"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assertion_type": {
+            "type": "string",
+            "enum": [
+              "STATES_LAW",
+              "STATES_POLICY",
+              "STATES_BOTH"
+            ]
+          },
+          "temporal_frame": {
+            "type": "string",
+            "enum": [
+              "PRESENT",
+              "HISTORICAL",
+              "FUTURE"
+            ]
+          },
+          "applies_to_condition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_qualifier": {
+            "type": "boolean"
+          },
+          "evidence_start": {
+            "type": "integer"
+          },
+          "evidence_end": {
+            "type": "integer"
+          },
+          "extraction_confidence": {
+            "type": "string",
+            "enum": [
+              "HIGH",
+              "LOW"
+            ]
+          }
+        }
+      },
+      "Impact": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "change_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "segment_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_tier": {
+            "type": "string",
+            "enum": [
+              "STRUCTURED",
+              "LEXICAL"
+            ]
+          },
+          "system_status": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "UPDATE_NEEDED",
+              "POSSIBLE_IMPACT",
+              "LEGAL_REVIEW_REQUIRED"
+            ]
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "proposed_patch": {
+            "anyOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Patch"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "RESOLVED"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ACCEPTED",
+                  "REJECTED",
+                  "ESCALATED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NOT_APPLICABLE",
+                  "WRONG_MATCH",
+                  "POLICY_EXCEEDS",
+                  "NEEDS_COUNSEL",
+                  "OTHER"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolving_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ImpactListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "change_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "segment_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_tier": {
+            "type": "string",
+            "enum": [
+              "STRUCTURED",
+              "LEXICAL"
+            ]
+          },
+          "system_status": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "UPDATE_NEEDED",
+              "POSSIBLE_IMPACT",
+              "LEGAL_REVIEW_REQUIRED"
+            ]
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "proposed_patch": {
+            "anyOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Patch"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "RESOLVED"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ACCEPTED",
+                  "REJECTED",
+                  "ESCALATED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NOT_APPLICABLE",
+                  "WRONG_MATCH",
+                  "POLICY_EXCEEDS",
+                  "NEEDS_COUNSEL",
+                  "OTHER"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolving_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artefact_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "locator": {
+            "type": "string"
+          },
+          "segment_text": {
+            "type": "string"
+          },
+          "concept": {
+            "type": "string"
+          },
+          "update_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          }
+        }
+      },
+      "ImpactDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "change_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "segment_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "rule_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_tier": {
+            "type": "string",
+            "enum": [
+              "STRUCTURED",
+              "LEXICAL"
+            ]
+          },
+          "system_status": {
+            "type": "string",
+            "enum": [
+              "CURRENT",
+              "UPDATE_NEEDED",
+              "POSSIBLE_IMPACT",
+              "LEGAL_REVIEW_REQUIRED"
+            ]
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "proposed_patch": {
+            "anyOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Patch"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "RESOLVED"
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ACCEPTED",
+                  "REJECTED",
+                  "ESCALATED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NOT_APPLICABLE",
+                  "WRONG_MATCH",
+                  "POLICY_EXCEEDS",
+                  "NEEDS_COUNSEL",
+                  "OTHER"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolving_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artefact_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "current_version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "change": {
+            "$ref": "#/components/schemas/Change"
+          },
+          "regulatory_update": {
+            "$ref": "#/components/schemas/Update"
+          },
+          "segment": {
+            "$ref": "#/components/schemas/Segment"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Rule"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence_raw_text": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "integer"
+              },
+              "end": {
+                "type": "integer"
+              },
+              "quote": {
+                "type": "string"
+              },
+              "locator": {
+                "type": "string"
+              },
+              "version_id": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              }
+            }
+          },
+          "audit": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "impact_id": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "actor_id": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "actor_name": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "object"
+                },
+                "created_at": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Artefact": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "DOCX",
+              "JSON"
+            ]
+          },
+          "current_version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "analysis_version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "ArtefactDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "DOCX",
+              "JSON"
+            ]
+          },
+          "current_version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "analysis_version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "current_version": {
+            "$ref": "#/components/schemas/Version"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Version"
+            }
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            }
+          },
+          "analysis_is_stale": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImportResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "segment_count": {
+            "type": "integer"
+          },
+          "rule_count": {
+            "type": "integer"
+          },
+          "extraction_warnings": {
+            "type": "integer"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Change": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "update_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "concept": {
+            "type": "string"
+          },
+          "change_type": {
+            "type": "string"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "type": "string"
+          },
+          "source_span": {
+            "type": "string"
+          }
+        }
+      },
+      "Update": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "provider_ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gazetted_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_date": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "provider_ref": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gazetted_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_date": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Change"
+            }
+          }
+        }
+      },
+      "IntakeResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "created": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Analysis": {
+        "type": "object",
+        "properties": {
+          "update_id": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "created": {
+            "type": "integer"
+          },
+          "not_actioned": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "segment_id": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "artefact_id": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "locator": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "HISTORICAL"
+                  ]
+                }
+              }
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "change_id": {
+                  "type": "string",
+                  "pattern": "^[0-9]+$"
+                },
+                "concept": {
+                  "type": "string"
+                },
+                "system_status": {
+                  "type": "string",
+                  "enum": [
+                    "POSSIBLE_IMPACT"
+                  ]
+                },
+                "explanation": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Revision": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "revision"
+        ]
+      },
+      "EditPatch": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "new": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+            "maxLength": 30
+          }
+        },
+        "required": [
+          "revision",
+          "new"
+        ]
+      },
+      "Reject": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "rejection_reason": {
+            "type": "string",
+            "enum": [
+              "NOT_APPLICABLE",
+              "WRONG_MATCH",
+              "POLICY_EXCEEDS",
+              "NEEDS_COUNSEL",
+              "OTHER"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 5000
+          }
+        },
+        "required": [
+          "revision",
+          "rejection_reason"
+        ]
+      },
+      "Escalate": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 5000
+          }
+        },
+        "required": [
+          "revision"
+        ]
+      },
+      "Approval": {
+        "type": "object",
+        "properties": {
+          "impact": {
+            "$ref": "#/components/schemas/Impact"
+          },
+          "version": {
+            "$ref": "#/components/schemas/Version"
+          }
+        }
+      },
+      "RegulatoryPayload": {
+        "type": "object",
+        "properties": {
+          "provider_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gazetted_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "changes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "properties": {
+                "concept": {
+                  "type": "string",
+                  "enum": [
+                    "retirement_age",
+                    "reemployment_age",
+                    "cpf_ow_ceiling",
+                    "shared_parental_leave_weeks",
+                    "paternity_leave_weeks"
+                  ]
+                },
+                "change_type": {
+                  "type": "string",
+                  "enum": [
+                    "VALUE_CHANGED",
+                    "DUTY_ADDED",
+                    "DUTY_REMOVED",
+                    "SCOPE_CHANGED"
+                  ]
+                },
+                "old_value": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "new_value": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "source_span": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 10000
+                }
+              },
+              "required": [
+                "concept",
+                "change_type",
+                "unit",
+                "source_span"
+              ]
+            }
+          }
+        },
+        "required": [
+          "provider_ref",
+          "title",
+          "effective_date",
+          "changes"
+        ]
+      }
+    }
+  }
+}

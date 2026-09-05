@@ -1,0 +1,6 @@
+{
+  "hr-system-config.json": {
+    "$.hr.retirementAge": { "concept": "retirement_age", "assertion_type": "STATES_LAW" },
+    "$.hr.reemploymentAge": { "concept": "reemployment_age", "assertion_type": "STATES_LAW" }
+  }
+}
