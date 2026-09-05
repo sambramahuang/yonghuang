@@ -11,7 +11,7 @@ import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments } from 
 import { ROLE_LABEL, type Role } from "./lib/role";
 import { useSharedDocuments } from "./lib/sharedDocuments";
 import { useLiveDocuments } from "./lib/liveDocuments";
-import { api, ApiError, getToken, setToken } from "./api/client";
+import { api, getToken, setToken } from "./api/client";
 import LoginScreen from "./components/LoginScreen";
 import type { User } from "./api/types";
 import type { ChangeStatus, SortKey } from "./types";
@@ -50,8 +50,6 @@ function LawyerApp() {
   // "Associate", while approval itself ignored the picker entirely.
   const role: Role = user?.capability === "APPROVER" ? "senior_partner" : "associate";
   const canUpload = user?.capability === "APPROVER" || user?.capability === "REVIEWER";
-  const canApprove = user?.capability === "APPROVER";
-  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -84,26 +82,6 @@ function LawyerApp() {
     setActiveTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
   }
 
-  // Approving a redline runs the real workflow: submit it, then approve it.
-  // The backend refuses if the same user does both, so separation of duties
-  // still holds exactly as it does over the API.
-  async function handleToggleApproval(_documentId: string, clauseId: string, approved: boolean) {
-    const id = impactIdFor(clauseId);
-    if (!id || !approved) return;
-    setActionError(null);
-    try {
-      const detail = await api.impact(id);
-      const submitted = detail.workflow_state === "SUBMITTED"
-        ? detail
-        : await api.submit(id, detail.revision);
-      await api.approve(id, submitted.revision);
-      reload();
-    } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Could not approve this change");
-      reload();
-    }
-  }
-
   if (!token) {
     return (
       <LoginScreen
@@ -115,7 +93,7 @@ function LawyerApp() {
     );
   }
 
-  const banner = actionError ?? loadError;
+  const banner = loadError;
 
   return (
     <div className="min-h-screen bg-paper">
@@ -217,8 +195,9 @@ function LawyerApp() {
               <DocumentViewer
                 doc={selected}
                 documents={documents}
-                canApprove={canApprove}
-                onToggleApproval={handleToggleApproval}
+                user={user}
+                impactIdFor={impactIdFor}
+                reload={reload}
               />
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-line text-sm text-ink-faint">

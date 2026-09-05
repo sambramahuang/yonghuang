@@ -1,15 +1,19 @@
-import { Check, ChevronDown, GitBranch, Undo2 } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, GitBranch } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api, ApiError } from "../api/client";
+import type { ImpactDetail, User } from "../api/types";
 import { getBlastRadiusForChange, getCategoryBreakdown } from "../lib/legalGraph";
 import { AUTHORITY_ICON, AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
 import type { Clause, FirmDocument } from "../types";
 import Redline from "./Redline";
+import ReviewPanel from "./ReviewPanel";
 
 interface Props {
   doc: FirmDocument;
   documents: FirmDocument[];
-  canApprove: boolean;
-  onToggleApproval: (clauseId: string, approved: boolean) => void;
+  user: User | null;
+  impactIdFor: (clauseId: string) => string | null;
+  reload: () => void;
 }
 
 // Real-world counterparty framing for the contract documents in the demo
@@ -34,13 +38,15 @@ function parseHeading(heading: string): { number: string; title: string } {
 function PaperClause({
   clause,
   documents,
-  canApprove,
-  onToggleApproval,
+  user,
+  impactIdFor,
+  reload,
 }: {
   clause: Clause;
   documents: FirmDocument[];
-  canApprove: boolean;
-  onToggleApproval: (clauseId: string, approved: boolean) => void;
+  user: User | null;
+  impactIdFor: (clauseId: string) => string | null;
+  reload: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const change = clause.change;
@@ -56,6 +62,29 @@ function PaperClause({
   const categoryText = Object.entries(categoryBreakdown)
     .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
     .join(" · ");
+
+  // The redline above is derived from a flattened snapshot of the finding;
+  // the actual edit/submit/approve/reject/escalate workflow needs the real
+  // ImpactDetail (revision, workflow_state, audit) from the backend, fetched
+  // only once the reviewer actually opens this clause.
+  const impactId = change ? impactIdFor(clause.id) : null;
+  const [detail, setDetail] = useState<ImpactDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  async function loadDetail() {
+    if (!impactId) return;
+    try {
+      setDetail(await api.impact(impactId));
+      setDetailError(null);
+    } catch (e) {
+      setDetailError(e instanceof ApiError ? e.message : "Could not load this finding");
+    }
+  }
+
+  useEffect(() => {
+    if (open && impactId && !detail && !detailError) loadDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, impactId]);
 
   return (
     <div className={change ? `border-l-2 ${cfg.border} -ml-4 pl-[14px]` : ""}>
@@ -88,27 +117,6 @@ function PaperClause({
             {AuthorityIcon && <AuthorityIcon size={11} />}
             Authority: {change.authority}
           </span>
-          {clause.status === "change" && canApprove && (
-            <button
-              type="button"
-              onClick={() => onToggleApproval(clause.id, !change.approved)}
-              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-semibold transition ${
-                change.approved
-                  ? "border-line text-ink-soft hover:bg-surface-2"
-                  : "border-good-line bg-good-bg text-good hover:opacity-80"
-              }`}
-            >
-              {change.approved ? (
-                <>
-                  <Undo2 size={10} /> Unapprove
-                </>
-              ) : (
-                <>
-                  <Check size={10} /> Approve
-                </>
-              )}
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -147,13 +155,34 @@ function PaperClause({
               </ul>
             )}
           </div>
+
+          {impactId && (
+            <div className="mt-3.5">
+              {detailError && (
+                <p className="rounded-lg border border-bad-line bg-bad-bg p-2.5 text-xs text-bad">{detailError}</p>
+              )}
+              {!detail && !detailError && (
+                <p className="text-xs text-ink-faint">Loading review details…</p>
+              )}
+              {detail && (
+                <ReviewPanel
+                  impact={detail}
+                  user={user}
+                  onChanged={() => {
+                    loadDetail();
+                    reload();
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-export default function DocumentPaper({ doc, documents, canApprove, onToggleApproval }: Props) {
+export default function DocumentPaper({ doc, documents, user, impactIdFor, reload }: Props) {
   const isContract = doc.type === "Contract";
   const meta = CONTRACT_META[doc.id];
   const isExecuted = isContract && doc.citation.toLowerCase().includes("executed");
@@ -189,8 +218,9 @@ export default function DocumentPaper({ doc, documents, canApprove, onToggleAppr
             key={clause.id}
             clause={clause}
             documents={documents}
-            canApprove={canApprove}
-            onToggleApproval={onToggleApproval}
+            user={user}
+            impactIdFor={impactIdFor}
+            reload={reload}
           />
         ))}
       </div>

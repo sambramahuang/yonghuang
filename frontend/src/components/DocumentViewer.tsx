@@ -7,6 +7,7 @@ import {
   getEffectiveStatus,
   summarizeChanges,
 } from "../lib/legalGraph";
+import type { User } from "../api/types";
 import type { FirmDocument } from "../types";
 import DocumentPaper from "./DocumentPaper";
 import ImpactGraphModal from "./ImpactGraphModal";
@@ -16,11 +17,12 @@ import SummaryModal from "./SummaryModal";
 interface Props {
   doc: FirmDocument;
   documents: FirmDocument[];
-  canApprove: boolean;
-  onToggleApproval: (documentId: string, clauseId: string, approved: boolean) => void;
+  user: User | null;
+  impactIdFor: (clauseId: string) => string | null;
+  reload: () => void;
 }
 
-export default function DocumentViewer({ doc, documents, canApprove, onToggleApproval }: Props) {
+export default function DocumentViewer({ doc, documents, user, impactIdFor, reload }: Props) {
   const [showSummary, setShowSummary] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -127,12 +129,7 @@ export default function DocumentViewer({ doc, documents, canApprove, onToggleApp
         </div>
 
         <div className="flex-1 overflow-y-auto bg-surface-2 p-8">
-          <DocumentPaper
-            doc={doc}
-            documents={documents}
-            canApprove={canApprove}
-            onToggleApproval={(clauseId, approved) => onToggleApproval(doc.id, clauseId, approved)}
-          />
+          <DocumentPaper doc={doc} documents={documents} user={user} impactIdFor={impactIdFor} reload={reload} />
         </div>
 
         <button
