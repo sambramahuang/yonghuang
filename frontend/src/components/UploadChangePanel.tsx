@@ -1,114 +1,164 @@
-import { CheckCircle2, FileUp, GitBranch, UploadCloud } from "lucide-react";
-import { useMemo, useState } from "react";
-import {
-  findDocumentsByAuthority,
-  getAllAuthorities,
-  getCategoryBreakdown,
-  ingestChange,
-  type IngestResult,
-} from "../lib/legalGraph";
-import { AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
-import type { AuthorityType, ChangeStatus, FirmDocument } from "../types";
-import StatusBadge from "./StatusBadge";
+import { AlertTriangle, CheckCircle2, FileText, FileUp, Gavel, UploadCloud } from "lucide-react";
+import { useState } from "react";
+import { api, ApiError } from "../api/client";
 
 interface Props {
-  documents: FirmDocument[];
-  onIngested: (result: IngestResult) => void;
+  onIngested: () => void;
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+type Mode = "document" | "law";
 
-const FIELD =
-  "mt-1.5 w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-ink-faint/20";
-const LABEL = "text-xs font-semibold text-ink-soft";
+const TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "handbook", label: "Handbook / manual" },
+  { value: "template", label: "Template" },
+  { value: "faq", label: "FAQ" },
+  { value: "config", label: "System config (JSON)" },
+  { value: "training", label: "Training material" },
+  { value: "playbook", label: "Playbook" },
+];
 
-export default function UploadChangePanel({ documents, onIngested }: Props) {
+interface DocumentResult {
+  name: string;
+  segment_count: number;
+  rule_count: number;
+}
+
+interface LawResult {
+  created: boolean;
+  update_id: string | null;
+  title: string | null;
+  changes_found: number;
+  unmapped: { change_type: string; source_span: string }[];
+  findings_created?: number;
+  message?: string;
+}
+
+const DROPZONE_ACCEPT: Record<Mode, string> = { document: ".docx,.pdf,.json", law: ".docx,.pdf" };
+
+export default function UploadChangePanel({ onIngested }: Props) {
+  const [mode, setMode] = useState<Mode>("document");
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [type, setType] = useState("handbook");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [docResult, setDocResult] = useState<DocumentResult | null>(null);
+  const [lawResult, setLawResult] = useState<LawResult | null>(null);
 
-  const [status, setStatus] = useState<Extract<ChangeStatus, "change">>("change");
-  const [authority, setAuthority] = useState("");
-  const [authorityType, setAuthorityType] = useState<AuthorityType>("case");
-  const [originDocumentId, setOriginDocumentId] = useState("");
-  const [originClauseId, setOriginClauseId] = useState("");
-  const [date, setDate] = useState(todayISO());
-  const [summary, setSummary] = useState("");
-  const [detail, setDetail] = useState("");
-  const [redlineBefore, setRedlineBefore] = useState("");
-  const [redlineAfter, setRedlineAfter] = useState("");
+  function switchMode(next: Mode) {
+    setMode(next);
+    setFile(null);
+    setError(null);
+    setDocResult(null);
+    setLawResult(null);
+  }
 
-  const [result, setResult] = useState<IngestResult | null>(null);
-
-  const originDoc = documents.find((d) => d.id === originDocumentId) ?? null;
-  const knownAuthorities = useMemo(() => getAllAuthorities(documents), [documents]);
-
-  const relatedDocs = useMemo(
-    () => findDocumentsByAuthority(documents, authority, originDocumentId),
-    [documents, authority, originDocumentId],
-  );
-  const breakdown = getCategoryBreakdown(relatedDocs);
-  const breakdownText = Object.entries(breakdown)
-    .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
-    .join(" · ");
-
-  const canIngest =
-    originDocumentId !== "" &&
-    originClauseId !== "" &&
-    authority.trim().length > 0 &&
-    summary.trim().length > 0;
-
-  function handleIngest() {
-    const res = ingestChange(documents, {
-      originDocumentId,
-      originClauseId,
-      status,
-      authority: authority.trim(),
-      authorityType,
-      date,
-      summary,
-      detail,
-      redlineBefore,
-      redlineAfter,
-    });
-    setResult(res);
-    onIngested(res);
+  async function handleUpload() {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "document") {
+        setDocResult(await api.uploadArtefact(file, type));
+      } else {
+        setLawResult(await api.uploadRegulatoryChange(file));
+      }
+      onIngested();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not upload this document");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function reset() {
     setFile(null);
-    setStatus("change");
-    setAuthority("");
-    setAuthorityType("case");
-    setOriginDocumentId("");
-    setOriginClauseId("");
-    setDate(todayISO());
-    setSummary("");
-    setDetail("");
-    setRedlineBefore("");
-    setRedlineAfter("");
-    setResult(null);
+    setType("handbook");
+    setError(null);
+    setDocResult(null);
+    setLawResult(null);
   }
 
-  if (result) {
-    const cfg = STATUS_CONFIG[result.newStatus];
+  if (docResult) {
     return (
       <div className="mx-auto max-w-xl rounded-2xl border border-line bg-surface p-12 text-center shadow-md">
-        <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full border ${cfg.bg} ${cfg.border}`}>
-          <CheckCircle2 size={26} className={cfg.text} />
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-good-line bg-good-bg">
+          <CheckCircle2 size={26} className="text-good" />
         </div>
-        <h2 className="mt-5 font-serif text-2xl font-medium text-ink">Change ingested</h2>
+        <h2 className="mt-5 font-serif text-2xl font-medium text-ink">Document ingested</h2>
         <p className="mx-auto mt-3.5 max-w-sm text-sm leading-relaxed text-ink-soft">
-          <span className="font-semibold text-ink">{result.clauseHeading}</span> in{" "}
-          <span className="font-semibold text-ink">{result.originTitle}</span> is now marked
+          <span className="font-semibold text-ink">{docResult.name}</span> was parsed into{" "}
+          {docResult.segment_count} segment{docResult.segment_count !== 1 ? "s" : ""}, with{" "}
+          {docResult.rule_count} extracted rule{docResult.rule_count !== 1 ? "s" : ""}.
         </p>
-        <div className="mt-3.5 flex justify-center">
-          <StatusBadge status={result.newStatus} />
+        <p className="mt-3 text-xs text-ink-faint">
+          It appears in search now, but shows no findings until a regulatory update affecting it
+          has been logged and analysed.
+        </p>
+        <div className="mt-7 flex justify-center gap-3">
+          <button
+            type="button"
+            onClick={reset}
+            className="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold text-ink hover:bg-surface-2"
+          >
+            Upload another document
+          </button>
         </div>
-        <p className="mt-6 inline-flex items-center gap-1.5 text-sm text-ink-soft">
-          <GitBranch size={14} />
-          {result.affectedCount} document{result.affectedCount !== 1 ? "s" : ""} already cite this
-          authority and are flagged automatically — no manual edits required.
-        </p>
+      </div>
+    );
+  }
+
+  if (lawResult) {
+    const noChanges = lawResult.changes_found === 0;
+    return (
+      <div className="mx-auto max-w-xl rounded-2xl border border-line bg-surface p-12 text-center shadow-md">
+        <div
+          className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full border ${
+            noChanges ? "border-seminal-line bg-seminal-bg" : "border-good-line bg-good-bg"
+          }`}
+        >
+          {noChanges ? (
+            <AlertTriangle size={26} className="text-seminal" />
+          ) : (
+            <CheckCircle2 size={26} className="text-good" />
+          )}
+        </div>
+        <h2 className="mt-5 font-serif text-2xl font-medium text-ink">
+          {noChanges ? "No mapped changes found" : "Change in law applied"}
+        </h2>
+        {noChanges ? (
+          <p className="mx-auto mt-3.5 max-w-sm text-sm leading-relaxed text-ink-soft">
+            {lawResult.message ?? "Nothing in this document matched a concept the system tracks."}
+          </p>
+        ) : (
+          <>
+            <p className="mx-auto mt-3.5 max-w-sm text-sm leading-relaxed text-ink-soft">
+              <span className="font-semibold text-ink">{lawResult.title}</span> was read as{" "}
+              {lawResult.changes_found} change{lawResult.changes_found !== 1 ? "s" : ""}
+              {!lawResult.created && " (already logged — this is the existing record)"}.
+            </p>
+            <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-ink-soft">
+              <Gavel size={14} />
+              {lawResult.findings_created ?? 0} finding{lawResult.findings_created === 1 ? "" : "s"} created
+              across every document in the system that cites the affected concept.
+            </p>
+          </>
+        )}
+        {lawResult.unmapped.length > 0 && (
+          <div className="mx-auto mt-4 max-w-sm rounded-lg border border-line-soft bg-surface-2 p-3 text-left">
+            <p className="text-xs font-semibold text-ink-soft">
+              {lawResult.unmapped.length} statement{lawResult.unmapped.length !== 1 ? "s" : ""} didn&rsquo;t match a
+              known concept and was left out:
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {lawResult.unmapped.map((u, i) => (
+                <li key={i} className="text-xs italic text-ink-faint">
+                  &ldquo;{u.source_span}&rdquo;
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="mt-7 flex justify-center gap-3">
           <button
             type="button"
@@ -125,12 +175,33 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h2 className="font-serif text-2xl font-medium text-ink">Upload a change</h2>
+        <h2 className="font-serif text-2xl font-medium text-ink">Upload</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          Log an amendment, a court decision, or revised guidance once, against the tool, system,
-          or practice it directly amends. Every other document already citing the same authority
-          is flagged automatically — no manual cross-referencing required.
+          {mode === "document"
+            ? "Add a firm document — an agreement, playbook, template, or manual — for extraction. It is only flagged once a regulatory update affecting it has been logged and analysed."
+            : "Add a judgment, amendment, or circular. The system reads it, matches it against every concept it already tracks, and flags every affected document immediately — no manual entry required."}
         </p>
+      </div>
+
+      <div className="inline-flex rounded-xl border border-line bg-surface-2 p-1">
+        <button
+          type="button"
+          onClick={() => switchMode("document")}
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${
+            mode === "document" ? "bg-surface text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          <FileText size={14} /> Firm document
+        </button>
+        <button
+          type="button"
+          onClick={() => switchMode("law")}
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${
+            mode === "law" ? "bg-surface text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+          }`}
+        >
+          <Gavel size={14} /> Change in law
+        </button>
       </div>
 
       <label
@@ -144,11 +215,16 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
           setDragOver(false);
           setFile(e.dataTransfer.files?.[0] ?? null);
         }}
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-7 text-center transition ${
+        className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition ${
           dragOver ? "border-accent bg-surface-2" : "border-line bg-surface"
         }`}
       >
-        <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <input
+          type="file"
+          accept={DROPZONE_ACCEPT[mode]}
+          className="hidden"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
         {file ? (
           <>
             <FileUp size={22} className="text-ink-soft" />
@@ -159,189 +235,44 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
           <>
             <UploadCloud size={22} className="text-ink-faint" />
             <p className="mt-2.5 text-sm font-medium text-ink">
-              Drop the gazette notice, judgment, or circular here
+              {mode === "document" ? "Drop a DOCX, PDF, or JSON file here" : "Drop a DOCX or PDF file here"}
             </p>
-            <p className="mt-0.5 text-xs text-ink-faint">or click to browse (optional — you can also just fill in the fields below)</p>
+            <p className="mt-0.5 text-xs text-ink-faint">or click to browse</p>
           </>
         )}
       </label>
 
-      <div className="space-y-4 rounded-2xl border border-line bg-surface p-7 shadow-sm">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={FIELD}>
-              <option value="change">Change — the required edit is known</option>
-            </select>
-          </div>
-          <div>
-            <label className={LABEL}>Effective / decision date</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={FIELD} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
-          <div>
-            <label className={LABEL}>Authority — the statute or case law</label>
-            <input
-              type="text"
-              list="known-authorities"
-              value={authority}
-              onChange={(e) => setAuthority(e.target.value)}
-              placeholder="e.g. Court of Appeal in X v Y [2026] SGCA 12, or PDPA s.14 (proposed amendment)"
-              className={FIELD}
-            />
-            <datalist id="known-authorities">
-              {knownAuthorities.map((a) => (
-                <option key={a} value={a} />
-              ))}
-            </datalist>
-          </div>
-          <div>
-            <label className={LABEL}>Authority type</label>
-            <select
-              value={authorityType}
-              onChange={(e) => setAuthorityType(e.target.value as AuthorityType)}
-              className={FIELD}
-            >
-              {(Object.keys(AUTHORITY_TYPE_LABEL) as AuthorityType[]).map((t) => (
-                <option key={t} value={t}>
-                  {AUTHORITY_TYPE_LABEL[t]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL}>Document this change amends</label>
-            <select
-              value={originDocumentId}
-              onChange={(e) => {
-                setOriginDocumentId(e.target.value);
-                setOriginClauseId("");
-              }}
-              className={FIELD}
-            >
-              <option value="">Select a document…</option>
-              {documents.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL}>Clause / provision affected</label>
-            <select
-              value={originClauseId}
-              onChange={(e) => setOriginClauseId(e.target.value)}
-              disabled={!originDoc}
-              className={`${FIELD} disabled:bg-surface-2 disabled:text-ink-faint`}
-            >
-              <option value="">Select a clause…</option>
-              {originDoc?.clauses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.heading}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className={LABEL}>What changed (one line)</label>
-          <input
-            type="text"
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="e.g. Deemed consent no longer covers AI training data"
-            className={FIELD}
-          />
-        </div>
-
-        <div>
-          <label className={LABEL}>Detail</label>
-          <textarea
-            value={detail}
-            onChange={(e) => setDetail(e.target.value)}
-            rows={3}
-            placeholder="Explain the change in enough detail that someone reading it later understands exactly what it requires and why."
-            className={FIELD}
-          />
-        </div>
-
-        {status === "change" && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={LABEL}>Text being removed (optional)</label>
-              <textarea
-                value={redlineBefore}
-                onChange={(e) => setRedlineBefore(e.target.value)}
-                rows={3}
-                placeholder="Paste the exact wording to strike out…"
-                className={`${FIELD} font-mono text-xs`}
-              />
-            </div>
-            <div>
-              <label className={LABEL}>Text being inserted (optional)</label>
-              <textarea
-                value={redlineAfter}
-                onChange={(e) => setRedlineAfter(e.target.value)}
-                rows={3}
-                placeholder="Paste the replacement wording…"
-                className={`${FIELD} font-mono text-xs`}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {authority.trim().length > 0 && (
+      {mode === "document" && (
         <div className="rounded-2xl border border-line bg-surface p-7 shadow-sm">
-          <div className="flex items-center gap-1.5">
-            <GitBranch size={16} className="text-ink" />
-            <h3 className="text-sm font-semibold text-ink">
-              Documents already citing this authority ({relatedDocs.length})
-            </h3>
-          </div>
-          <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
-            Computed automatically from exact authority citations — no keyword guessing. These
-            will be flagged as this change's blast radius the moment it's ingested.
-            {breakdownText && <> Breakdown: {breakdownText}.</>}
-          </p>
-
-          {relatedDocs.length === 0 ? (
-            <p className="mt-3 text-sm text-ink-faint">
-              No other document currently cites this authority — this will be the first.
-            </p>
-          ) : (
-            <ul className="mt-3.5 space-y-2">
-              {relatedDocs.map((d) => (
-                <li key={d.id} className="flex items-start gap-3 rounded-xl border border-line-soft p-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">{d.title}</p>
-                    <p className="font-mono text-xs text-ink-soft">{d.citation}</p>
-                    <p className="mt-0.5 text-xs italic text-ink-faint">
-                      {d.type} · {d.client}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <label className="text-xs font-semibold text-ink-soft">Document type</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="mt-1.5 w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-ink-faint/20"
+          >
+            {TYPE_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>
         </div>
+      )}
+
+      {error && (
+        <p role="alert" className="flex items-center gap-2 rounded-lg border border-bad-line bg-bad-bg p-3 text-sm text-bad">
+          <AlertTriangle size={14} /> {error}
+        </p>
       )}
 
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={handleIngest}
-          disabled={!canIngest}
+          onClick={handleUpload}
+          disabled={!file || busy}
           className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-paper hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Ingest change
+          {busy ? "Uploading…" : mode === "document" ? "Upload document" : "Read and apply"}
         </button>
       </div>
     </div>

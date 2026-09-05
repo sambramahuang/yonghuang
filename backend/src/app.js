@@ -1,15 +1,18 @@
 import express from 'express';
 import multer from 'multer';
+import path from 'node:path';
 import { authenticate, requireCapability } from './auth/rbac.js';
 import { loginHandler } from './auth/login.js';
 import { ensure, HttpError } from './errors.js';
 import { ingest } from './ingest/index.js';
-import { intake } from './regulatory/intake.js';
+import { parseDocx } from './ingest/parsers/docx.js';
+import { parsePdf } from './ingest/parsers/pdf.js';
+import { intake, intakeFromDocument } from './regulatory/intake.js';
 import { analyse } from './impact/match.js';
 import { editPatch, submit, approve, acceptNoEdit, resolve } from './workflow/review.js';
 import { artefactDetail, impactDetail, listImpacts } from './queries.js';
 
-export function createApp({ pool, secret, extractor, drafter = null, discoverer = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
+export function createApp({ pool, secret, extractor, drafter = null, discoverer = null, regulatoryExtractor = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
   const app = express();
   app.disable('x-powered-by');
   // Accepts a comma-separated list so Vite's port fallback (5173 -> 5174) does
@@ -58,6 +61,18 @@ export function createApp({ pool, secret, extractor, drafter = null, discoverer 
   });
   app.post('/api/regulatory-updates',reviewer,async (req,res) => {
     const result = await intake(pool,req.body); res.status(result.created ? 201 : 200).json(result);
+  });
+  // Free-text counterpart to the structured POST above: reads a judgment,
+  // amendment, or circular, has the model propose the same structured shape,
+  // then analyses immediately so one upload flags every affected document.
+  app.post('/api/regulatory-updates/upload',reviewer,upload.single('file'),async (req,res) => {
+    ensure(req.file,400,'Attach a DOCX or PDF file in multipart field file');
+    const name = path.basename(req.file.originalname ?? '');
+    const extension = path.extname(name).toLowerCase();
+    ensure(['.docx','.pdf'].includes(extension),415,'Only DOCX and PDF are supported for a regulatory document');
+    const parsed = extension === '.pdf' ? await parsePdf(req.file.buffer) : await parseDocx(req.file.buffer);
+    const result = await intakeFromDocument(pool,{ text: parsed.raw_text,name,drafter,regulatoryExtractor });
+    res.status(result.update_id ? (result.created ? 201 : 200) : 200).json(result);
   });
   app.get('/api/regulatory-updates',async (req,res) => res.json((await pool.query('SELECT id,provider_ref,title,source_url,gazetted_date,effective_date FROM regulatory_updates ORDER BY id DESC')).rows));
   app.get('/api/regulatory-updates/:id',async (req,res) => {

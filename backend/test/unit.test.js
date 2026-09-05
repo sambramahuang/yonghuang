@@ -134,3 +134,68 @@ test('concept discovery normalises candidates and refuses near-duplicates', asyn
   assert.match(prompt,/retirement_age/);
   assert.match(prompt,/REUSE an existing concept/);
 });
+
+test('regulatory extraction never trusts the model for unit, evidence, or an unmapped concept',async () => {
+  const { extractRegulatoryChanges } = await import('../src/regulatory/extract.js');
+  const noticeConcepts = new Map([['notice_period_months',
+    { id: 'notice_period_months',label: 'Notice Period Duration',unit: 'months',direction: 'FLOOR',aliases: ['notice period'] }]]);
+  const noticeText = 'The minimum notice period rises from one (1) month to two (2) months.';
+  const extractWith = (raw,text = noticeText) => extractRegulatoryChanges(text,{ extractor: async () => raw,concepts: noticeConcepts });
+
+  // The model's own unit is never trusted — the concept's declared unit wins,
+  // so a hallucinated or mismatched unit string can never reach validateUpdate().
+  const wrongUnit = await extractWith({ title: 't',effective_date: null,changes: [
+    { concept: 'notice_period_months',change_type: 'VALUE_CHANGED',old_value: 1,new_value: 2,source_span: noticeText },
+  ] });
+  assert.equal(wrongUnit.changes[0].unit,'months');
+
+  // A quote that is not an exact substring of the document cannot be trusted
+  // as the basis for flagging every document that cites it.
+  const paraphrased = await extractWith({ title: 't',effective_date: null,changes: [
+    { concept: 'notice_period_months',change_type: 'VALUE_CHANGED',old_value: 1,new_value: 2,source_span: 'notice goes up to two months' },
+  ] });
+  assert.equal(paraphrased.changes.length,0);
+
+  // concept:null is UNMAPPED, not an error — it is reported, never submitted,
+  // exactly like a firm document's extraction abstaining on an unknown claim.
+  const unmapped = await extractWith({ title: 't',effective_date: null,changes: [
+    { concept: null,change_type: 'DUTY_ADDED',old_value: null,new_value: null,source_span: noticeText },
+  ] });
+  assert.equal(unmapped.changes.length,0);
+  assert.equal(unmapped.unmapped.length,1);
+
+  // VALUE_CHANGED without two distinct numbers is not deterministic enough to
+  // trust as a value swap — it still surfaces, downgraded to a qualitative
+  // change, rather than being silently dropped.
+  const noValues = await extractWith({ title: 't',effective_date: null,changes: [
+    { concept: 'notice_period_months',change_type: 'VALUE_CHANGED',old_value: null,new_value: null,source_span: noticeText },
+  ] });
+  assert.equal(noValues.changes[0].change_type,'SCOPE_CHANGED');
+  assert.equal(noValues.changes[0].old_value,null);
+
+  // Two changes claiming the same concept collapse to one — intake() requires
+  // a distinct concept per change.
+  const duplicate = await extractWith({ title: 't',effective_date: null,changes: [
+    { concept: 'notice_period_months',change_type: 'VALUE_CHANGED',old_value: 1,new_value: 2,source_span: noticeText },
+    { concept: 'notice_period_months',change_type: 'DUTY_ADDED',old_value: null,new_value: null,source_span: noticeText },
+  ] });
+  assert.equal(duplicate.changes.length,1);
+
+  // Malformed model output (schema violation) is a reported error, not a throw.
+  const malformed = await extractWith({ changes: 'not an array' });
+  assert.match(malformed.error,/schema/);
+});
+
+test('regulatory extraction Responses adapter sends strict structured output for the live concept list',async () => {
+  const { liveRegulatoryExtractor } = await import('../src/extract/providers.js');
+  let request;
+  const extractor = liveRegulatoryExtractor({ apiKey: 'test-key',model: 'test-model',fetchImpl: async (url,options) => {
+    request = { url,...JSON.parse(options.body) };
+    return { ok: true,json: async () => ({ status: 'completed',output: [{ type: 'message',
+      content: [{ type: 'output_text',text: JSON.stringify({ title: 't',effective_date: null,changes: [] }) }] }] }) };
+  } });
+  const result = await extractor({ prompt: 'read this',conceptIds: ['notice_period_months'] });
+  assert.deepEqual(result,{ title: 't',effective_date: null,changes: [] });
+  assert.equal(request.text.format.strict,true);
+  assert.deepEqual(request.text.format.schema.properties.changes.items.properties.concept.enum,['notice_period_months',null]);
+});

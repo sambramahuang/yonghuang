@@ -10,7 +10,6 @@ import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
 import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
 import { ROLE_LABEL, useRole, type Role } from "./lib/role";
-import { useSharedDocuments } from "./lib/sharedDocuments";
 import { useLiveDocuments } from "./lib/liveDocuments";
 import { api, ApiError, getToken, setToken } from "./api/client";
 import LoginScreen from "./components/LoginScreen";
@@ -39,18 +38,20 @@ function Logo() {
   );
 }
 
-// The lawyer-facing app: search only. There is no upload affordance here —
-// in the real system, changes are routed in automatically by the firm's
-// horizon-scanning/scraping tool, never entered by hand at this screen.
+// The lawyer-facing app: search, plus a reviewer's affordance to add a firm
+// document. Regulatory changes themselves are never entered by hand here —
+// in the real system those are routed in automatically by the firm's
+// horizon-scanning/scraping tool, via the structured intake API.
 function LawyerApp() {
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState<User | null>(null);
   const { documents, error: loadError, reload, impactIdFor } = useLiveDocuments(token);
   const [role, setRole] = useRole();
-  // Approval is granted by the backend capability, not the local role picker:
-  // the role selector previews what each seniority sees, but only an APPROVER
-  // token can actually write a new version, and the server enforces that.
-  const canUpload = role === "senior_partner";
+  // The role picker only previews what each seniority sees in the UI copy —
+  // every actual permission (upload, submit, approve) is granted by the
+  // signed-in user's real backend capability, which the server enforces
+  // independently regardless of what this dropdown says.
+  const canUpload = user?.capability === "REVIEWER";
   const canApprove = user?.capability === "APPROVER";
   // A reviewer's step is submitting a drafted edit for someone else to approve.
   const canSubmit = user?.capability === "REVIEWER";
@@ -189,7 +190,7 @@ function LawyerApp() {
                 className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-xs font-semibold text-paper shadow-sm hover:opacity-90"
               >
                 <UploadCloud size={13} />
-                Upload change
+                Upload document
               </button>
             )}
           </div>
@@ -266,7 +267,7 @@ function LawyerApp() {
 
       {showUpload && canUpload && (
         <Modal onClose={() => setShowUpload(false)} wide>
-          <UploadChangePanel documents={documents} onIngested={() => reload()} />
+          <UploadChangePanel onIngested={() => reload()} />
         </Modal>
       )}
     </div>
@@ -275,10 +276,9 @@ function LawyerApp() {
 
 // The ingestion console: stands in for the firm's automated scraping/
 // horizon-scanning pipeline. Deliberately not reachable from the lawyer app
-// — reached only at /ingest, e.g. from a separate machine for a demo.
+// — reached only at /ingest, e.g. from a separate machine for a demo. It
+// posts straight to the same backend the lawyer app reads from.
 function IngestionConsole() {
-  const [documents, setDocuments] = useSharedDocuments();
-
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-line bg-surface">
@@ -298,7 +298,7 @@ function IngestionConsole() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-6">
-        <UploadChangePanel documents={documents} onIngested={(res) => setDocuments(res.documents)} />
+        <UploadChangePanel onIngested={() => {}} />
       </main>
     </div>
   );

@@ -82,6 +82,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 
+// Multipart, so this bypasses `request`'s JSON Content-Type — the browser
+// must set its own boundary, which it only does when the header is absent.
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, `Cannot reach the API at ${BASE}. Check that the backend is running.`);
+  }
+  if (!response.ok) {
+    const message = await response
+      .json()
+      .then((body: { error?: string }) => body.error)
+      .catch(() => null);
+    throw new ApiError(response.status, message ?? `Upload failed (${response.status})`);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   health: () => request<{ status: string; extraction_mode: string }>("/health"),
   login: (username: string, password: string) =>
@@ -96,10 +120,38 @@ export const api = {
     request<
       Artefact & { segments: { id: number; ordinal: number; locator: string; text: string; char_start: number }[] }
     >(`/artefacts/${id}`),
+  uploadArtefact: (file: File, type: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("type", type);
+    return upload<{ id: string; name: string; format: string; version_id: number; version: number; segment_count: number; rule_count: number }>(
+      "/artefacts",
+      form,
+    );
+  },
 
   regulatoryUpdates: () => request<RegulatoryUpdate[]>("/regulatory-updates"),
   analyse: (updateId: string) =>
     post<{ created: number; suppressed?: number }>(`/regulatory-updates/${updateId}/analyse`),
+  // Reads a judgment, amendment, or circular, has the model propose the
+  // structured changes it makes, and analyses immediately — one upload
+  // flags every document in the system that the change actually affects.
+  uploadRegulatoryChange: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return upload<{
+      created: boolean;
+      update_id: string | null;
+      title: string | null;
+      effective_date?: string;
+      changes_found: number;
+      unmapped: { change_type: string; source_span: string }[];
+      findings_created?: number;
+      not_actioned?: unknown[];
+      gaps?: unknown[];
+      message?: string;
+    }>("/regulatory-updates/upload", form);
+  },
 
   impacts: (params: { update_id?: string; status?: SystemStatus; open?: boolean } = {}) => {
     const search = new URLSearchParams();

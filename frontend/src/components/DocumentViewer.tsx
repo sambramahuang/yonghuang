@@ -1,5 +1,5 @@
 import { GitBranch, Maximize2, Minimize2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   buildImpactGraphs,
   getBlastRadiusForDocument,
@@ -12,6 +12,18 @@ import DocumentPaper, { type ResolveAction } from "./DocumentPaper";
 import ImpactGraphModal from "./ImpactGraphModal";
 import StatusBadge from "./StatusBadge";
 import SummaryModal from "./SummaryModal";
+
+// Ambient artwork shown behind the paper, inside the panel — re-rolled
+// whenever a different document is opened.
+const PAPER_BACKGROUNDS = [
+  "/backgrounds/paper-bg-1.png",
+  "/backgrounds/paper-bg-2.png",
+  "/backgrounds/paper-bg-3.png",
+];
+
+function randomBackground() {
+  return PAPER_BACKGROUNDS[Math.floor(Math.random() * PAPER_BACKGROUNDS.length)];
+}
 
 interface Props {
   doc: FirmDocument;
@@ -33,9 +45,15 @@ export default function DocumentViewer({
   const [showSummary, setShowSummary] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [background, setBackground] = useState(randomBackground);
 
   const status = getEffectiveStatus(doc);
   const blastRadius = getBlastRadiusForDocument(doc, documents);
+
+  // Re-roll the backdrop every time a different document is opened.
+  useEffect(() => {
+    setBackground(randomBackground());
+  }, [doc.id]);
 
   return (
     <>
@@ -45,7 +63,7 @@ export default function DocumentViewer({
       <div
         className={
           expanded
-            ? "fixed inset-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+            ? "fixed inset-y-6 left-1/2 z-50 flex w-[min(1040px,calc(100vw-3rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
             : "relative flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-md"
         }
       >
@@ -101,7 +119,10 @@ export default function DocumentViewer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-surface-2 p-8">
+        <div
+          className="flex-1 overflow-y-auto bg-surface-2 bg-cover bg-center bg-no-repeat p-8"
+          style={{ backgroundImage: `url(${background})` }}
+        >
           <DocumentPaper
             doc={doc}
             documents={documents}

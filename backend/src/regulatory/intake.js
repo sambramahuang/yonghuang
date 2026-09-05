@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { loadConcepts } from '../vocabulary.js';
-import { ensure } from '../errors.js';
+import { ensure, HttpError } from '../errors.js';
 import { transaction } from '../db.js';
+import { extractRegulatoryChanges } from './extract.js';
+import { analyse } from '../impact/match.js';
 
 const isDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -55,4 +57,40 @@ export async function intake(pool, body) {
     }
     return { id, created: true };
   });
+}
+
+/**
+ * The end-to-end path behind "upload a change in law": read the document,
+ * have the model propose the structured changes `intake()` requires, store
+ * them, and immediately analyse — so one upload is enough to flag every
+ * document in the system that the change actually affects, the same
+ * end-to-end action a human otherwise performs by hand (read the source,
+ * write the structured update, submit it, run the analysis).
+ *
+ * Every fact the model states is still re-validated by `intake()` exactly as
+ * a hand-written submission would be; nothing here relaxes that check.
+ */
+export async function intakeFromDocument(pool, { text, name, drafter, regulatoryExtractor }) {
+  const concepts = await loadConcepts(pool);
+  const extracted = await extractRegulatoryChanges(text, { extractor: regulatoryExtractor, concepts });
+  if (extracted.error) throw new HttpError(422, `Could not read this document: ${extracted.error}`);
+  if (!extracted.changes.length) {
+    return { created: false, update_id: null, title: extracted.title, changes_found: 0,
+      unmapped: extracted.unmapped, message: 'No changes matching a known concept were found in this document.' };
+  }
+  // The source text rarely carries a stable external reference the way a
+  // gazette notice does, so identity is the document's own content — a
+  // second upload of the same file is then a genuine no-op, not a duplicate.
+  const provider_ref = `UPLOAD-${createHash('sha256').update(text).digest('hex').slice(0, 32)}`;
+  const payload = {
+    provider_ref,
+    title: extracted.title || name,
+    effective_date: extracted.effective_date ?? new Date().toISOString().slice(0, 10),
+    changes: extracted.changes,
+  };
+  const { id, created } = await intake(pool, payload);
+  const analysis = await analyse(pool, id, undefined, drafter);
+  return { created, update_id: id, title: payload.title, effective_date: payload.effective_date,
+    changes_found: extracted.changes.length, unmapped: extracted.unmapped,
+    findings_created: analysis.created, not_actioned: analysis.not_actioned, gaps: analysis.gaps };
 }
