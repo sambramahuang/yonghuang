@@ -71,7 +71,8 @@ export default function SummaryModal({ doc, summary, onClose }: Props) {
                 )}
                 <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
                 <p className="mt-2 text-xs italic text-ink-faint">
-                  Authority: {change.authority} ({AUTHORITY_TYPE_LABEL[change.authorityType]}) · {change.date}
+                  Authorit{change.authorities.length > 1 ? "ies" : "y"}: {change.authorities.join("; ")} (
+                  {AUTHORITY_TYPE_LABEL[change.authorityType]}) · {change.date}
                 </p>
                 <p className="mt-2.5 border-t border-line pt-2.5 text-xs text-ink-soft">
                   <span className="font-semibold text-ink">

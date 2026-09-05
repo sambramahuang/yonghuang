@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   buildImpactGraphs,
   getBlastRadiusForDocument,
+  getChangedClauses,
   getEffectiveStatus,
   summarizeChanges,
 } from "../lib/legalGraph";
@@ -105,7 +106,7 @@ export default function DocumentViewer({
             <button
               type="button"
               onClick={() => setShowGraph(true)}
-              disabled={blastRadius.length === 0}
+              disabled={getChangedClauses(doc).length === 0}
               className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <GitBranch size={13} />

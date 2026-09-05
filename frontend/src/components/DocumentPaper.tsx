@@ -122,7 +122,7 @@ function PaperClause({
           </span>
           <span className="inline-flex items-center gap-1 text-ink-faint italic">
             {AuthorityIcon && <AuthorityIcon size={11} />}
-            Authority: {change.authority}
+            Authorit{change.authorities.length > 1 ? "ies" : "y"}: {change.authorities.join("; ")}
           </span>
           {decidable && !rejecting && !editing && (
             <span className="inline-flex items-center gap-1.5">
