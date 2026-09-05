@@ -1,5 +1,5 @@
-import { GitBranch, Maximize2, Minimize2, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { GitBranch, Maximize2, Minimize2, Pencil, Save, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildImpactGraphs,
   getBlastRadiusForDocument,
@@ -32,7 +32,13 @@ interface Props {
   canApprove: boolean;
   canSubmit: boolean;
   busyClauseId: string | null;
-  onResolve: (documentId: string, clauseId: string, action: ResolveAction, reason?: RejectionReason, text?: string) => void;
+  onResolve: (
+    documentId: string,
+    clauseId: string,
+    action: ResolveAction,
+    reason?: RejectionReason,
+    text?: string,
+  ) => void | Promise<void>;
 }
 
 export default function DocumentViewer({
@@ -47,6 +53,9 @@ export default function DocumentViewer({
   const [showGraph, setShowGraph] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [background, setBackground] = useState(randomBackground);
+  const [editMode, setEditMode] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const status = getEffectiveStatus(doc);
   const blastRadius = getBlastRadiusForDocument(doc, documents);
@@ -55,6 +64,45 @@ export default function DocumentViewer({
   useEffect(() => {
     setBackground(randomBackground());
   }, [doc.id]);
+
+  // Leaving a document mid-edit drops the draft session — reopening it
+  // re-fetches from the server rather than reviving stale typed text.
+  useEffect(() => {
+    setEditMode(false);
+    setDrafts({});
+  }, [doc.id]);
+
+  const dirtyClauses = useMemo(
+    () =>
+      doc.clauses.filter((c) => {
+        const draft = drafts[c.id];
+        return draft !== undefined && draft.trim() !== "" && draft !== (c.change?.patchText ?? "");
+      }),
+    [doc.clauses, drafts],
+  );
+
+  function handleDraftChange(clauseId: string, text: string) {
+    setDrafts((prev) => ({ ...prev, [clauseId]: text }));
+  }
+
+  // One "Save" for the whole document: each touched clause is drafted then
+  // submitted in turn — the same two API calls the old per-clause Edit /
+  // Submit buttons made, just run together so a reviewer edits the document
+  // like a document and sends it for approval once, at the end.
+  async function handleSaveChanges() {
+    if (dirtyClauses.length === 0) return;
+    setSaving(true);
+    try {
+      for (const clause of dirtyClauses) {
+        await onResolve(doc.id, clause.id, "edit", undefined, drafts[clause.id]);
+        await onResolve(doc.id, clause.id, "submit");
+      }
+      setDrafts({});
+      setEditMode(false);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
@@ -117,12 +165,47 @@ export default function DocumentViewer({
                 </span>
               )}
             </button>
+            {canSubmit && (
+              <button
+                type="button"
+                onClick={() => setEditMode((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                  editMode
+                    ? "border-accent bg-accent text-paper"
+                    : "border-line bg-surface text-ink hover:bg-surface-2"
+                }`}
+              >
+                <Pencil size={13} />
+                {editMode ? "Exit edit mode" : "Edit mode"}
+              </button>
+            )}
+            {editMode && (
+              <button
+                type="button"
+                onClick={handleSaveChanges}
+                disabled={dirtyClauses.length === 0 || saving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Save size={13} />
+                {saving
+                  ? "Saving…"
+                  : dirtyClauses.length > 0
+                    ? `Save & send for approval (${dirtyClauses.length})`
+                    : "Save & send for approval"}
+              </button>
+            )}
           </div>
+          {editMode && (
+            <p className="mt-2 text-[11px] text-ink-faint">
+              Type directly into any flagged clause below. Clauses with no proposed edit are marked for
+              review only. Saving submits everything you've changed for an approver to accept.
+            </p>
+          )}
         </div>
 
         <div
           className="flex-1 overflow-y-auto bg-surface-2 bg-cover bg-center bg-no-repeat p-8"
-          style={{ backgroundImage: `url(${background})` }}
+          style={expanded ? undefined : { backgroundImage: `url(${background})` }}
         >
           <DocumentPaper
             doc={doc}
@@ -131,6 +214,9 @@ export default function DocumentViewer({
             canSubmit={canSubmit}
             busyClauseId={busyClauseId}
             onResolve={(clauseId, action, reason, text) => onResolve(doc.id, clauseId, action, reason, text)}
+            editMode={editMode}
+            drafts={drafts}
+            onDraftChange={handleDraftChange}
           />
         </div>
 

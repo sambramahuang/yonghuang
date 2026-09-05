@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import type { ReactNode } from "react";
 import type { SortKey } from "../types";
 
 interface Props {
@@ -6,6 +7,7 @@ interface Props {
   onQueryChange: (q: string) => void;
   sortKey: SortKey;
   onSortChange: (s: SortKey) => void;
+  rightSlot?: ReactNode;
 }
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -20,6 +22,7 @@ export default function SearchBar({
   onQueryChange,
   sortKey,
   onSortChange,
+  rightSlot,
 }: Props) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -53,6 +56,7 @@ export default function SearchBar({
           ))}
         </select>
       </div>
+      {rightSlot}
     </div>
   );
 }

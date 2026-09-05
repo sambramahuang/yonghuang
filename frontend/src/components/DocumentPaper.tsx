@@ -1,4 +1,4 @@
-import { Check, ChevronDown, GitBranch, Pencil, Send, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, GitBranch, Pencil, Send, X } from "lucide-react";
 import { useState } from "react";
 import { REJECTION_REASONS } from "../api/statusConfig";
 import type { RejectionReason } from "../api/types";
@@ -16,6 +16,10 @@ interface Props {
   canSubmit: boolean;
   busyClauseId: string | null;
   onResolve: (clauseId: string, action: ResolveAction, reason?: RejectionReason, text?: string) => void;
+  /** Reviewer-only document-wide edit session — see DocumentViewer. */
+  editMode?: boolean;
+  drafts?: Record<string, string>;
+  onDraftChange?: (clauseId: string, text: string) => void;
 }
 
 // Real-world counterparty framing for the contract documents in the demo
@@ -63,6 +67,9 @@ function PaperClause({
   canSubmit,
   busy,
   onResolve,
+  editMode = false,
+  draftValue,
+  onDraftChange,
 }: {
   clause: Clause;
   documents: FirmDocument[];
@@ -70,13 +77,16 @@ function PaperClause({
   canSubmit: boolean;
   busy: boolean;
   onResolve: (clauseId: string, action: ResolveAction, reason?: RejectionReason, text?: string) => void;
+  editMode?: boolean;
+  draftValue?: string;
+  onDraftChange?: (text: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [rejecting, setRejecting] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editingLocal, setEditingLocal] = useState(false);
   const [reason, setReason] = useState<RejectionReason>("NOT_APPLICABLE");
   const change = clause.change;
-  const [draftText, setDraftText] = useState(change?.patchText ?? "");
+  const draftText = draftValue ?? change?.patchText ?? "";
   const cfg = STATUS_CONFIG[clause.status];
   const { number, title } = parseHeading(clause.heading);
   const AuthorityIcon = change ? AUTHORITY_ICON[change.authorityType] : null;
@@ -93,6 +103,14 @@ function PaperClause({
   // submission, the approver after — may also rewrite the machine's draft
   // before deciding, so a bad first draft is never the final word.
   const editable = unresolved && change?.hasPatch && (needsSubmission ? canSubmit : canApprove);
+  // In a reviewer's document-wide edit session, every clause they could type
+  // into opens immediately — no separate "Edit" click to discover it first.
+  const forceOpen = editMode && editable && canSubmit;
+  const editing = editingLocal || forceOpen;
+  // Flagged for review but with nothing drafted to type into (POSSIBLE_IMPACT,
+  // or a legal-review finding the drafter declined) — surfaced distinctly so a
+  // reviewer walking the document in edit mode doesn't read past it.
+  const flaggedNoDraft = editMode && unresolved && !change?.hasPatch && canSubmit;
 
   const blastRadius = change ? getBlastRadiusForChange(change, documents, clause.documentId) : [];
   const categoryBreakdown = getCategoryBreakdown(blastRadius.map((b) => b.document));
@@ -156,10 +174,7 @@ function PaperClause({
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
-                setDraftText(change?.patchText ?? "");
-                setEditing(true);
-              }}
+              onClick={() => setEditingLocal(true)}
               className="inline-flex items-center gap-1 rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-semibold text-ink transition hover:opacity-80 disabled:opacity-40"
             >
               <Pencil size={10} /> Edit
@@ -228,39 +243,62 @@ function PaperClause({
       )}
 
       {/* The machine's draft is a starting point, not a verdict — a reviewer
-          or approver can rewrite it here before it is submitted or approved. */}
+          or approver can rewrite it here before it is submitted or approved.
+          Inside a document-wide edit session this box just stays open for
+          typing; saving happens once, for the whole document, from there. */}
       {editable && editing && (
         <div className="mt-2 rounded-lg border border-line bg-surface-2 px-3 py-2 font-sans text-[11px]">
-          <label className="mb-1 block font-semibold text-ink" htmlFor={`edit-${clause.id}`}>
-            Edit proposed replacement
-          </label>
+          {!forceOpen && (
+            <label className="mb-1 block font-semibold text-ink" htmlFor={`edit-${clause.id}`}>
+              Edit proposed replacement
+            </label>
+          )}
           <textarea
             id={`edit-${clause.id}`}
             value={draftText}
-            onChange={(e) => setDraftText(e.target.value)}
+            onChange={(e) => onDraftChange?.(e.target.value)}
             rows={4}
             className="w-full rounded-md border border-line bg-surface px-2 py-1.5 font-serif text-[13px] text-ink outline-none focus:ring-1 focus:ring-ink-faint/30"
           />
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              disabled={busy || !draftText.trim()}
-              onClick={() => {
-                setEditing(false);
-                onResolve(clause.id, "edit", undefined, draftText);
-              }}
-              className="rounded-md border border-line bg-ink px-2 py-1 font-semibold text-paper hover:opacity-90 disabled:opacity-40"
-            >
-              {busy ? "Working…" : "Save edit"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="rounded-md border border-line px-2 py-1 font-semibold text-ink-soft hover:bg-surface-2"
-            >
-              Cancel
-            </button>
-          </div>
+          {!forceOpen && (
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={busy || !draftText.trim()}
+                onClick={() => {
+                  setEditingLocal(false);
+                  onResolve(clause.id, "edit", undefined, draftText);
+                }}
+                className="rounded-md border border-line bg-ink px-2 py-1 font-semibold text-paper hover:opacity-90 disabled:opacity-40"
+              >
+                {busy ? "Working…" : "Save edit"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingLocal(false)}
+                className="rounded-md border border-line px-2 py-1 font-semibold text-ink-soft hover:bg-surface-2"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Flagged for review but nothing was drafted to type into — surfaced so
+          a reviewer walking the document in edit mode reads why, even though
+          there's no text box here for them to act on directly. */}
+      {flaggedNoDraft && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-seminal-line bg-seminal-bg/50 px-3 py-2 font-sans text-[11px]">
+          <AlertTriangle size={12} className="shrink-0 text-seminal" />
+          <span className="font-semibold text-seminal">Flagged for review — no proposed edit drafted.</span>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="ml-auto font-semibold text-seminal underline decoration-dotted underline-offset-2"
+          >
+            Why?
+          </button>
         </div>
       )}
 
@@ -289,7 +327,9 @@ function PaperClause({
             </p>
           )}
           <p className="mt-2.5 text-sm font-semibold leading-snug text-ink">{change.summary}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
+          {change.detail !== change.summary && (
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
+          )}
           <div className="mt-3.5 rounded-lg bg-surface p-3">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
               <GitBranch size={12} />
@@ -313,7 +353,17 @@ function PaperClause({
   );
 }
 
-export default function DocumentPaper({ doc, documents, canApprove, canSubmit, busyClauseId, onResolve }: Props) {
+export default function DocumentPaper({
+  doc,
+  documents,
+  canApprove,
+  canSubmit,
+  busyClauseId,
+  onResolve,
+  editMode = false,
+  drafts = {},
+  onDraftChange,
+}: Props) {
   const isContract = doc.type === "Contract";
   const meta = CONTRACT_META[doc.id];
   const isExecuted = isContract && doc.citation.toLowerCase().includes("executed");
@@ -353,6 +403,9 @@ export default function DocumentPaper({ doc, documents, canApprove, canSubmit, b
             canSubmit={canSubmit}
             busy={busyClauseId === clause.id}
             onResolve={onResolve}
+            editMode={editMode}
+            draftValue={drafts[clause.id]}
+            onDraftChange={onDraftChange && ((text) => onDraftChange(clause.id, text))}
           />
         ))}
       </div>

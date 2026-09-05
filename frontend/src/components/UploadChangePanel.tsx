@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, FileText, FileUp, Gavel, UploadCloud } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, FileUp, Gavel, Loader2, UploadCloud, X } from "lucide-react";
 import { useState } from "react";
 import { api, ApiError } from "../api/client";
 
@@ -19,8 +19,10 @@ const TYPE_OPTIONS: { value: string; label: string }[] = [
 
 interface DocumentResult {
   name: string;
-  segment_count: number;
-  rule_count: number;
+  status: "success" | "error";
+  segment_count?: number;
+  rule_count?: number;
+  error?: string;
 }
 
 interface LawResult {
@@ -41,62 +43,134 @@ const DROPZONE_ACCEPT: Record<Mode, string> = { document: ".docx,.pdf,.json", la
 export default function UploadChangePanel({ onIngested }: Props) {
   const [mode, setMode] = useState<Mode>("document");
   const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [type, setType] = useState("handbook");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [docResult, setDocResult] = useState<DocumentResult | null>(null);
+  const [docResults, setDocResults] = useState<DocumentResult[] | null>(null);
   const [lawResult, setLawResult] = useState<LawResult | null>(null);
 
   function switchMode(next: Mode) {
     setMode(next);
     setFile(null);
+    setFiles([]);
     setError(null);
-    setDocResult(null);
+    setDocResults(null);
     setLawResult(null);
   }
 
+  function addFiles(incoming: FileList | File[]) {
+    const list = Array.from(incoming);
+    if (!list.length) return;
+    if (mode === "law") {
+      setFile(list[0]);
+      return;
+    }
+    // Dropping or browsing again adds to the queue rather than replacing it,
+    // so a batch can be built up from several drags/selections.
+    setFiles((prev) => {
+      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
+      return [...prev, ...list.filter((f) => !seen.has(`${f.name}:${f.size}`))];
+    });
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleUpload() {
-    if (!file) return;
     setBusy(true);
     setError(null);
-    try {
-      if (mode === "document") {
-        setDocResult(await api.uploadArtefact(file, type));
-      } else {
+    if (mode === "law") {
+      if (!file) { setBusy(false); return; }
+      try {
         setLawResult(await api.uploadRegulatoryChange(file));
+        onIngested();
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : "Could not upload this document");
+      } finally {
+        setBusy(false);
       }
-      onIngested();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not upload this document");
-    } finally {
-      setBusy(false);
+      return;
     }
+
+    if (!files.length) { setBusy(false); return; }
+    // Sequential, not concurrent: extraction already fans out per-segment on
+    // the backend, and live mode calls a real model per file — running many
+    // files at once would multiply that fan-out instead of adding to a queue.
+    // One bad file must not stop the rest of the batch from ingesting.
+    setProgress({ done: 0, total: files.length });
+    const results: DocumentResult[] = [];
+    for (const f of files) {
+      try {
+        const r = await api.uploadArtefact(f, type);
+        results.push({ name: f.name, status: "success", segment_count: r.segment_count, rule_count: r.rule_count });
+      } catch (e) {
+        results.push({ name: f.name, status: "error", error: e instanceof ApiError ? e.message : "Could not ingest this document" });
+      }
+      setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+    }
+    setDocResults(results);
+    setProgress(null);
+    setBusy(false);
+    onIngested();
   }
 
   function reset() {
     setFile(null);
+    setFiles([]);
     setType("handbook");
     setError(null);
-    setDocResult(null);
+    setDocResults(null);
     setLawResult(null);
   }
 
-  if (docResult) {
+  if (docResults) {
+    const successCount = docResults.filter((r) => r.status === "success").length;
+    const failCount = docResults.length - successCount;
     return (
       <div className="mx-auto max-w-xl rounded-2xl border border-line bg-surface p-12 text-center shadow-md">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-good-line bg-good-bg">
-          <CheckCircle2 size={26} className="text-good" />
+        <div
+          className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full border ${
+            failCount ? "border-seminal-line bg-seminal-bg" : "border-good-line bg-good-bg"
+          }`}
+        >
+          {failCount ? <AlertTriangle size={26} className="text-seminal" /> : <CheckCircle2 size={26} className="text-good" />}
         </div>
-        <h2 className="mt-5 font-serif text-2xl font-medium text-ink">Document ingested</h2>
-        <p className="mx-auto mt-3.5 max-w-sm text-sm leading-relaxed text-ink-soft">
-          <span className="font-semibold text-ink">{docResult.name}</span> was parsed into{" "}
-          {docResult.segment_count} segment{docResult.segment_count !== 1 ? "s" : ""}, with{" "}
-          {docResult.rule_count} extracted rule{docResult.rule_count !== 1 ? "s" : ""}.
-        </p>
-        <p className="mt-3 text-xs text-ink-faint">
-          It appears in search now, but shows no findings until a regulatory update affecting it
-          has been logged and analysed.
+        <h2 className="mt-5 font-serif text-2xl font-medium text-ink">
+          {docResults.length === 1
+            ? failCount
+              ? "Document failed to ingest"
+              : "Document ingested"
+            : `${successCount} of ${docResults.length} documents ingested`}
+        </h2>
+        <ul className="mx-auto mt-5 max-w-sm space-y-2 text-left">
+          {docResults.map((r, i) => (
+            <li key={i} className="rounded-lg border border-line-soft bg-surface-2 p-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate font-semibold text-ink">{r.name}</span>
+                {r.status === "success" ? (
+                  <CheckCircle2 size={14} className="shrink-0 text-good" />
+                ) : (
+                  <AlertTriangle size={14} className="shrink-0 text-bad" />
+                )}
+              </div>
+              {r.status === "success" ? (
+                <p className="mt-1 text-ink-faint">
+                  {r.segment_count} segment{r.segment_count !== 1 ? "s" : ""}, {r.rule_count} extracted rule
+                  {r.rule_count !== 1 ? "s" : ""}
+                </p>
+              ) : (
+                <p className="mt-1 text-bad">{r.error}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-xs text-ink-faint">
+          Ingested documents appear in search now, but show no findings until a regulatory update
+          affecting them has been logged and analysed.
         </p>
         <div className="mt-7 flex justify-center gap-3">
           <button
@@ -104,7 +178,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
             onClick={reset}
             className="rounded-xl border border-line px-5 py-2.5 text-sm font-semibold text-ink hover:bg-surface-2"
           >
-            Upload another document
+            Upload more documents
           </button>
         </div>
       </div>
@@ -258,7 +332,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          setFile(e.dataTransfer.files?.[0] ?? null);
+          addFiles(e.dataTransfer.files);
         }}
         className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-10 text-center transition ${
           dragOver ? "border-accent bg-surface-2" : "border-line bg-surface"
@@ -266,11 +340,15 @@ export default function UploadChangePanel({ onIngested }: Props) {
       >
         <input
           type="file"
+          multiple={mode === "document"}
           accept={DROPZONE_ACCEPT[mode]}
           className="hidden"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
-        {file ? (
+        {mode === "law" && file ? (
           <>
             <FileUp size={22} className="text-ink-soft" />
             <p className="mt-2.5 text-sm font-medium text-ink">{file.name}</p>
@@ -280,16 +358,46 @@ export default function UploadChangePanel({ onIngested }: Props) {
           <>
             <UploadCloud size={22} className="text-ink-faint" />
             <p className="mt-2.5 text-sm font-medium text-ink">
-              {mode === "document" ? "Drop a DOCX, PDF, or JSON file here" : "Drop a DOCX or PDF file here"}
+              {mode === "document" ? "Drop DOCX, PDF, or JSON files here" : "Drop a DOCX or PDF file here"}
             </p>
-            <p className="mt-0.5 text-xs text-ink-faint">or click to browse</p>
+            <p className="mt-0.5 text-xs text-ink-faint">
+              {mode === "document" ? "or click to browse — select or drop as many as you like" : "or click to browse"}
+            </p>
           </>
         )}
       </label>
 
+      {mode === "document" && files.length > 0 && (
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm">
+          <p className="text-xs font-semibold text-ink-soft">
+            {files.length} file{files.length !== 1 ? "s" : ""} queued
+          </p>
+          <ul className="mt-2.5 space-y-1.5">
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}:${f.size}`}
+                className="flex items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface-2 px-3 py-2 text-xs"
+              >
+                <span className="min-w-0 truncate text-ink">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(i)}
+                  disabled={busy}
+                  aria-label={`Remove ${f.name}`}
+                  className="shrink-0 text-ink-faint hover:text-bad disabled:opacity-40"
+                >
+                  <X size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {mode === "document" && (
         <div className="rounded-2xl border border-line bg-surface p-7 shadow-sm">
           <label className="text-xs font-semibold text-ink-soft">Document type</label>
+          <p className="mt-0.5 text-xs text-ink-faint">Applied to every file in this batch.</p>
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
@@ -314,10 +422,19 @@ export default function UploadChangePanel({ onIngested }: Props) {
         <button
           type="button"
           onClick={handleUpload}
-          disabled={!file || busy}
-          className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-paper hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={(mode === "document" ? files.length === 0 : !file) || busy}
+          className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-paper hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? "Uploading…" : mode === "document" ? "Upload document" : "Read and apply"}
+          {busy && <Loader2 size={15} className="animate-spin" />}
+          {progress
+            ? `Uploading ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`
+            : busy
+              ? "Uploading…"
+              : mode === "law"
+                ? "Read and apply"
+                : files.length > 1
+                  ? `Upload ${files.length} documents`
+                  : "Upload document"}
         </button>
       </div>
     </div>

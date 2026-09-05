@@ -1,14 +1,12 @@
 import { ChevronDown, Terminal, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import ClientDropdown from "./components/ClientDropdown";
 import DocumentCard from "./components/DocumentCard";
 import DocumentViewer from "./components/DocumentViewer";
 import FilterBar from "./components/FilterBar";
-import HexBackground from "./components/HexBackground";
 import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
-import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
+import { getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
 import { ROLE_LABEL, useRole, type Role } from "./lib/role";
 import { useLiveDocuments } from "./lib/liveDocuments";
 import { api, ApiError, getToken, setToken } from "./api/client";
@@ -50,19 +48,19 @@ function LawyerApp() {
   const [sortKey, setSortKey] = useState<SortKey>("relevance");
   const [statuses, setStatuses] = useState<ChangeStatus[]>([]);
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
-  const [client, setClient] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
 
   const types = useMemo(() => getAllTypes(documents), [documents]);
-  const clients = useMemo(() => getAllClients(documents), [documents]);
 
   const results = useMemo(
-    () => searchDocuments(documents, query, { statuses, types: activeTypes, client }, sortKey),
-    [documents, query, statuses, activeTypes, client, sortKey],
+    () => searchDocuments(documents, query, { statuses, types: activeTypes }, sortKey),
+    [documents, query, statuses, activeTypes, sortKey],
   );
 
   const selected = results.find((d) => d.id === selectedId) ?? results[0] ?? null;
+  const activeFilterCount = statuses.length + activeTypes.length;
 
   function toggleStatus(status: ChangeStatus) {
     setStatuses((prev) => (prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]));
@@ -128,8 +126,7 @@ function LawyerApp() {
 
   return (
     <div className="min-h-screen bg-paper">
-      <HexBackground />
-      <header className="relative z-10">
+      <header className="border-b border-line">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-5">
           <div className="flex items-center gap-3">
             <Logo />
@@ -140,11 +137,11 @@ function LawyerApp() {
               Read-only search
             </p>
             <div className="flex items-center gap-2">
-              <div className="relative">
+              <div className="relative rounded-lg border border-line bg-surface">
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as Role)}
-                  className="appearance-none border-none bg-transparent py-2 pl-0 pr-5 text-xs font-medium text-ink hover:text-ink-soft focus:outline-none"
+                  className="appearance-none border-none bg-transparent py-1.5 pl-2.5 pr-7 text-xs font-medium text-ink hover:text-ink-soft focus:outline-none"
                 >
                   {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
                     <option key={r} value={r}>
@@ -155,13 +152,13 @@ function LawyerApp() {
                 <ChevronDown
                   size={14}
                   strokeWidth={2.25}
-                  className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-ink-faint"
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
-                className="rounded-lg border border-line px-2.5 py-1.5 text-sm text-ink-faint hover:text-ink"
+                className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:bg-surface-2 hover:text-ink"
               >
                 Sign out{user ? ` (${user.capability})` : ""}
               </button>
@@ -180,35 +177,58 @@ function LawyerApp() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-6 py-8">
+      <main className="mx-auto max-w-7xl px-6 py-8">
         {banner && (
           <p role="alert" className="mb-4 rounded-lg border border-bad-line bg-bad-bg p-3 text-sm text-bad">
             {banner}
           </p>
         )}
-        <section className="mb-6">
-          <p className="text-xs font-bold uppercase tracking-wider text-brand">Search</p>
-          <h2 className="mt-3 whitespace-nowrap font-serif text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[60px]">
-            Every clause, traced across the firm.
-          </h2>
-        </section>
+        <h2 className="mb-4 font-serif text-4xl font-medium text-ink">Documents</h2>
 
         <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm">
-          <SearchBar query={query} onQueryChange={setQuery} sortKey={sortKey} onSortChange={setSortKey} />
-          <div className="mt-3 border-t border-line-soft pt-3">
+          <SearchBar
+            query={query}
+            onQueryChange={setQuery}
+            sortKey={sortKey}
+            onSortChange={setSortKey}
+            rightSlot={
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                aria-expanded={filtersOpen}
+                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
+                  filtersOpen || activeFilterCount > 0
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-line bg-surface text-ink-soft hover:border-line-soft"
+                }`}
+              >
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-paper">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform duration-300 ${filtersOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+            }
+          />
+          <div className="mt-3">
             <FilterBar
               statuses={statuses}
               onToggleStatus={toggleStatus}
               types={types}
               activeTypes={activeTypes}
               onToggleType={toggleType}
+              open={filtersOpen}
             />
           </div>
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr]">
           <div className="space-y-3">
-            <ClientDropdown clients={clients} value={client} onChange={setClient} />
             <p className="pt-1 font-mono text-[11px] tracking-wide text-ink-faint">
               {results.length} DOCUMENT{results.length !== 1 ? "S" : ""}
             </p>

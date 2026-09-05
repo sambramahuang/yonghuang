@@ -19,8 +19,8 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
     <button
       type="button"
       onClick={onClick}
-      className={`w-full min-w-0 overflow-hidden rounded-xl border bg-surface p-[18px] text-left shadow-sm transition ${
-        active ? "border-brand shadow-md" : "border-line hover:shadow-md"
+      className={`relative w-full min-w-0 origin-center overflow-hidden rounded-xl border bg-surface p-[18px] text-left shadow-sm transition-all duration-200 ease-out hover:z-10 hover:scale-[1.03] ${
+        active ? "border-brand shadow-md" : "border-line hover:shadow-lg"
       }`}
     >
       <div className="flex min-w-0 items-start justify-between gap-2.5">
@@ -36,15 +36,15 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
           rather than drifting as the metadata chips above it wrap. */}
       <div className="mt-2 flex items-center gap-3.5 text-[11.5px]">
         {changedCount > 0 ? (
-          <span className="font-semibold text-brand">
+          <span className="font-medium text-ink-soft">
             {changedCount} clause{changedCount > 1 ? "s" : ""} flagged
           </span>
         ) : (
           <span className="text-ink-faint">No clauses flagged</span>
         )}
         {blastRadius > 0 && (
-          <span className="inline-flex items-center gap-1 font-semibold text-brand">
-            <Link2 size={12} /> Blast radius {blastRadius}
+          <span className="inline-flex items-center gap-1 font-medium text-ink-soft">
+            <Link2 size={12} className="text-ink-faint" /> Blast radius {blastRadius}
           </span>
         )}
       </div>

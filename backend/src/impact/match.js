@@ -2,7 +2,7 @@ import { transaction } from '../db.js';
 import { ensure } from '../errors.js';
 import { requiresLegalReview } from './boundary.js';
 import { proposePatch } from './patch.js';
-import { proposeTextPatch } from './draft.js';
+import { proposeExplanation, proposeTextPatch } from './draft.js';
 
 // One candidate query: structured concept matching plus alias AND literal-old-value fallback.
 // Aliases intentionally contain stems (e.g. re-employ); literal matching uses numeric boundaries.
@@ -41,11 +41,14 @@ function classify(candidate) {
   if (presentRules.length > 1 || requiresLegalReview(rule, change)) {
     // Still beyond deterministic patching, but a drafter may offer replacement
     // wording for a reviewer to accept, rewrite or reject.
-    return { ...result('LEGAL_REVIEW_REQUIRED', 'This claim crosses the competence boundary: qualifications, conditions, tense, uncertainty, units, modality, or multiple claims require legal review. Any replacement wording below is a model draft, not a verified patch.'), draftable: true };
+    return { ...result('LEGAL_REVIEW_REQUIRED', 'This claim crosses the competence boundary: qualifications, conditions, tense, uncertainty, units, modality, or multiple claims require legal review. Any replacement wording is a model draft, not a verified patch.'), draftable: true };
   }
   if (rule.assertion_type === 'STATES_POLICY') {
     const generous = change.direction === 'FLOOR' ? Number(rule.value) > Number(change.new_value) : Number(rule.value) < Number(change.new_value);
-    return result('POSSIBLE_IMPACT', generous ? 'The stated policy may exceed the legal requirement. A human must confirm whether this is deliberate.' : 'This is a firm policy. A human must assess the regulatory impact; no patch is proposed.');
+    const requirementWord = change.direction === 'FLOOR' ? 'minimum' : 'maximum';
+    return result('POSSIBLE_IMPACT', generous
+      ? `This firm policy states ${rule.value} ${rule.unit}, which already exceeds the new legal ${requirementWord} of ${change.new_value} ${change.unit}. A human must confirm whether this is deliberate.`
+      : `This firm policy states ${rule.value} ${rule.unit}, but the new legal ${requirementWord} is ${change.new_value} ${change.unit} — the policy no longer meets it. This is a firm policy choice rather than a restatement of law, so no patch is proposed automatically; a human must assess the regulatory impact.`);
   }
   if (Number(rule.value) === Number(change.new_value)) return result('CURRENT', 'The extracted claim already states the new value.');
   if (Number(rule.value) !== Number(change.old_value)) return result('LEGAL_REVIEW_REQUIRED', 'The claim states neither the supplied old value nor the new value. No replacement can be inferred safely.');
@@ -72,11 +75,17 @@ export async function analyse(pool, updateId, today = new Date().toISOString().s
       }
       // Drafting runs outside the deterministic path: a failure or refusal
       // simply leaves the finding without a patch.
-      if (!verdict.patch && verdict.draftable && drafter) {
-        verdict.patch = await proposeTextPatch({
-          segment: { ...candidate.segment, id: candidate.segment_id, version_id: candidate.segment.version_id },
-          change, update, drafter,
-        });
+      if (verdict.draftable && drafter) {
+        const segmentRef = { ...candidate.segment, id: candidate.segment_id, version_id: candidate.segment.version_id };
+        if (!verdict.patch) {
+          verdict.patch = await proposeTextPatch({ segment: segmentRef, change, update, drafter });
+        }
+        // The generic boundary sentence says WHY a human is needed in the
+        // abstract; a reviewer needs to know what THIS clause says and how
+        // the update bears on it. A decline or error leaves classify()'s
+        // explanation in place rather than blocking the finding.
+        const explanation = await proposeExplanation({ segment: segmentRef, change, update, drafter });
+        if (explanation) verdict.explanation = explanation;
       }
       const inserted = await db.query(`INSERT INTO impact_results(change_id,segment_id,rule_id,evidence_tier,system_status,explanation,proposed_patch)
         VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(change_id,segment_id) DO NOTHING RETURNING id`,

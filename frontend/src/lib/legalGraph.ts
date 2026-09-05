@@ -43,12 +43,17 @@ export function getBlastRadiusForChange(
   documents: FirmDocument[],
   excludeDocumentId: string,
 ): BlastRadiusEntry[] {
+  // One entry per affected document, not per clause — a document with several
+  // clauses citing the same authority must still count and list once.
+  const seen = new Set<string>();
   const entries: BlastRadiusEntry[] = [];
   for (const doc of documents) {
-    if (doc.id === excludeDocumentId) continue;
+    if (doc.id === excludeDocumentId || seen.has(doc.id)) continue;
     for (const clause of getChangedClauses(doc)) {
       if (clause.change && clause.change.authorities.some((a) => change.authorities.includes(a))) {
+        seen.add(doc.id);
         entries.push({ document: doc, clause, change: clause.change });
+        break;
       }
     }
   }
@@ -109,7 +114,6 @@ function relevanceScore(doc: FirmDocument, query: string): number {
 export interface SearchFilters {
   statuses: ChangeStatus[]; // empty = all
   types: string[]; // empty = all
-  client: string; // "" = all clients
 }
 
 export function searchDocuments(
@@ -125,9 +129,6 @@ export function searchDocuments(
   }
   if (filters.types.length > 0) {
     results = results.filter((doc) => filters.types.includes(doc.type));
-  }
-  if (filters.client) {
-    results = results.filter((doc) => doc.client === filters.client);
   }
 
   const withScore = results.map((doc) => ({
@@ -234,9 +235,5 @@ export function getCategoryBreakdown(docs: FirmDocument[]): Record<string, numbe
 
 export function getAllTypes(documents: FirmDocument[]): string[] {
   return [...new Set(documents.map((d) => d.type))];
-}
-
-export function getAllClients(documents: FirmDocument[]): string[] {
-  return [...new Set(documents.map((d) => d.client))];
 }
 
