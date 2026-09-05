@@ -9,7 +9,7 @@ and that proposal is re-validated by the same checks a hand-written submission g
 anything is stored. Either path analyses immediately, flagging every artefact in the system that
 the change actually affects.
 
-The frontend is being built separately. See [the API guide](docs/API.md), [OpenAPI contract](docs/openapi.json), and [JavaScript client](client/api.js).
+See [Frontend](#frontend) below for the React app, and [the API guide](docs/API.md), [OpenAPI contract](docs/openapi.json), and [JavaScript client](client/api.js) for the API itself.
 
 ## Run locally
 
@@ -72,7 +72,7 @@ JSON semantics are explicitly declared in [config-fields.json](backend/config/co
 
 `npm test` runs unit tests and real PostgreSQL integration tests, each in a fresh temporary schema. `npm run test:unit` needs no database. Coverage includes exact expected findings, qualifiers, historical and policy cases, RBAC, immutable versions/audit, concurrent analysis/approval, overlapping patch rollback, stale extraction and Unicode offsets.
 
-Implemented: ingestion, validated extraction, structured/lexical matching, evidence detail, patch editing/submission, approval/rejection/escalation, version downloads, audit history and idempotency. See [design decisions](docs/IMPLEMENTATION.md).
+Implemented: ingestion, validated extraction, structured/lexical matching, evidence detail, patch editing/submission, approval/rejection/escalation, version downloads, audit history and idempotency. A finding that needs legal review also gets a model-drafted, clause-specific explanation of why (falling back to the deterministic boundary sentence on a decline or error) alongside any drafted replacement text — both are explicitly marked unverified. See [design decisions](docs/IMPLEMENTATION.md).
 
 MVP limits:
 
@@ -87,7 +87,7 @@ The original fixture requirements remain in [fixtures/README.md](fixtures/README
 
 ## Frontend
 
-The dashboard is a React + TypeScript + Vite app in `frontend/`, wired to the live API.
+"Panopticon" is a React + TypeScript + Vite app in `frontend/`, wired to the live API.
 
 ```sh
 cd frontend
@@ -101,12 +101,33 @@ and `:5174`, so Vite's port fallback works either way. Serving the app from any 
 needs that origin adding to `CORS_ORIGIN` in `.env`, followed by a backend restart — otherwise
 the browser blocks every response and the UI reports that it cannot reach the API.
 
-There is no login route by design. Mint a token with `npm run token -- reviewer` (or `approver`)
-and paste it into the prompt on first load; it is kept in `localStorage`. "Switch" clears it, which
-is how you move between the reviewer and approver roles to demonstrate separation of duties.
+Sign in with a seeded username/password (see [Seeded accounts](#seeded-accounts)) — `POST
+/api/login` mints a bearer token that's kept in `localStorage`; "Sign out" clears it. A separate
+Associate/Senior Partner dropdown in the header only previews what each seniority sees in the UI
+copy — it grants nothing. Every real permission (uploading, editing, submitting, approving) is
+enforced by the signed-in user's actual backend capability (REVIEWER or APPROVER), independent of
+that dropdown.
 
-The queue lists findings for the selected regulatory update, filterable by system status. Selecting
-one shows both evidence spans with the matched text highlighted in place, the regulator's own
-wording, and — where no patch was proposed — the specific competence-boundary reasons why.
-Reviewers edit and submit the redline; a different user with APPROVER capability approves it, which
-writes a new artefact version. The audit trail is shown beneath.
+The main screen is a searchable, filterable list of every document in the system (status: changed
+vs. unchanged; type; free text) next to a document viewer showing the full text as continuous
+clauses, each flagged clause annotated with its status, the regulator's wording, and — where no
+patch was proposed — the specific reason a human has to decide. From there:
+
+- **Summarise changes** — a modal rollup of every flagged clause's verdict and blast radius.
+- **View blast radius graph** — a graph of every other document affected by the same regulatory
+  changes as the one open.
+- **Edit mode** (reviewers only) — opens every clause with a machine-drafted replacement for
+  direct in-place typing, and saves + submits everything touched in one action. A clause flagged
+  for review with no proposed edit (e.g. a firm-policy finding) shows why but has no box to type
+  into — there's currently no path to draft a replacement from scratch when the model declined to.
+- Per clause, a reviewer can still **Edit**/**Submit** one at a time instead, and a different
+  APPROVER can **Accept**/**Reject** a submitted change — writing a new artefact version and
+  advancing the audit trail shown beneath.
+
+The upload modal (the header's "Upload document" button, reviewers only) has two modes:
+**Firm document** ingests a DOCX/PDF/JSON artefact (handbook, template, playbook, etc.) for
+extraction, same as `POST /api/artefacts`; **Change in law** takes a judgment, amendment, or
+circular and reads it the way `POST /api/regulatory-updates/upload` does — no structured form to
+fill in. A separate, unlinked `/ingest` route renders the same upload panel standing in for the
+firm's own automated horizon-scanning pipeline, reachable only by URL, never from the lawyer-facing
+screen.
