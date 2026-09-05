@@ -18,10 +18,22 @@ const getImpact = async (db, id) => (await db.query('SELECT * FROM impact_result
 export async function editPatch(pool, id, user, { revision, new: replacement }) {
   return transaction(pool, async db => {
     const impact = await lockImpact(db, id, revision);
-    ensure(impact.system_status === 'UPDATE_NEEDED' && impact.proposed_patch, 409, 'This finding cannot receive a patch');
-    ensure(typeof replacement === 'string' && /^(0|[1-9]\d*)(\.\d+)?$/.test(replacement) && replacement.length <= 30 && Number.isFinite(Number(replacement)), 400, 'new must be a non-negative numeric string');
+    // A drafted TEXT patch is editable wherever it exists, including on a
+    // legal-review finding: rewriting the draft is the point of that review.
+    const editable = impact.system_status === 'UPDATE_NEEDED'
+      || (impact.system_status === 'LEGAL_REVIEW_REQUIRED' && impact.proposed_patch?.kind === 'TEXT');
+    ensure(editable && impact.proposed_patch, 409, 'This finding cannot receive a patch');
+    const isText = impact.proposed_patch?.kind === 'TEXT';
+    ensure(typeof replacement === 'string', 400, 'new must be a string');
+    if (isText) {
+      // Prose replacement: a reviewer may rewrite the model's draft freely.
+      ensure(replacement.trim().length > 0 && replacement.length <= 4000, 400, 'new must be 1-4000 characters');
+    } else {
+      ensure(/^(0|[1-9]\d*)(\.\d+)?$/.test(replacement) && replacement.length <= 30 && Number.isFinite(Number(replacement)), 400, 'new must be a non-negative numeric string');
+    }
     ensure(Number(replacement) !== Number(impact.proposed_patch.old.replaceAll(',', '')), 400, 'Replacement must change the value');
-    const patch = { ...impact.proposed_patch, new: replacement };
+    const patch = { ...impact.proposed_patch, new: replacement,
+      ...(isText ? { drafted_by: 'HUMAN' } : {}) };
     await db.query("UPDATE impact_results SET proposed_patch=$2,edited_by=$3,submitted_by=NULL,workflow_state='DRAFT',revision=revision+1 WHERE id=$1", [id,patch,user.id]);
     await audit(db,id,user.id,'PATCH_EDITED',{ before: impact.proposed_patch, after: patch });
     return getImpact(db,id);
@@ -47,7 +59,9 @@ export async function approve(pool, id, user, { revision }) {
     ensure(ref, 404, 'Impact not found');
     const artefact = (await db.query('SELECT * FROM artefacts WHERE id=$1 FOR UPDATE', [ref.artefact_id])).rows[0];
     const impact = await lockImpact(db,id,revision);
-    ensure(impact.workflow_state === 'SUBMITTED' && impact.system_status === 'UPDATE_NEEDED' && impact.proposed_patch, 409, 'A submitted patch is required');
+    const approvable = impact.system_status === 'UPDATE_NEEDED'
+      || (impact.system_status === 'LEGAL_REVIEW_REQUIRED' && impact.proposed_patch?.kind === 'TEXT');
+    ensure(impact.workflow_state === 'SUBMITTED' && approvable && impact.proposed_patch, 409, 'A submitted patch is required');
     ensure(String(user.id) !== String(impact.edited_by) && String(user.id) !== String(impact.submitted_by), 403, 'An approver cannot approve their own edit or submission');
     const current = (await db.query('SELECT * FROM artefact_versions WHERE id=$1', [artefact.current_version_id])).rows[0];
     const base = (await db.query('SELECT * FROM artefact_versions WHERE id=$1', [impact.proposed_patch.base_version_id])).rows[0];

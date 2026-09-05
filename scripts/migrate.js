@@ -40,6 +40,35 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 3,
+    // Widen the format check so PDF uploads are storable.
+    async up(db) {
+      await db.query('ALTER TABLE artefacts DROP CONSTRAINT IF EXISTS artefacts_format_check');
+      await db.query("ALTER TABLE artefacts ADD CONSTRAINT artefacts_format_check CHECK (format IN ('DOCX','PDF','JSON'))");
+    },
+  },
+  {
+    version: 4,
+    // Allow model-drafted TEXT patches on findings that fail the deterministic
+    // boundary. VALUE patches keep their original, stricter guarantee: they may
+    // only exist on a structured UPDATE_NEEDED finding.
+    async up(db) {
+      await db.query('ALTER TABLE impact_results DROP CONSTRAINT IF EXISTS only_updates_patched');
+      await db.query(`ALTER TABLE impact_results ADD CONSTRAINT only_updates_patched CHECK (
+        proposed_patch IS NULL
+        OR (proposed_patch->>'kind' = 'VALUE' AND evidence_tier='STRUCTURED' AND system_status='UPDATE_NEEDED')
+        OR (proposed_patch->>'kind' = 'TEXT' AND system_status IN ('UPDATE_NEEDED','LEGAL_REVIEW_REQUIRED'))
+      )`);
+      // A TEXT patch must never claim to be verified. Dropped first: schema.sql
+      // already defines it for databases created at version 1.
+      await db.query('ALTER TABLE impact_results DROP CONSTRAINT IF EXISTS text_patch_unverified');
+      await db.query(`ALTER TABLE impact_results ADD CONSTRAINT text_patch_unverified CHECK (
+        proposed_patch IS NULL OR proposed_patch->>'kind' <> 'TEXT'
+        OR (proposed_patch->>'verified')::boolean IS FALSE
+      )`);
+    },
+  },
 ];
 
 export async function migrate(pool) {

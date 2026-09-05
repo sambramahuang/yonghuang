@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { parseDocx } from './parsers/docx.js';
 import { parseJson } from './parsers/json.js';
+import { parsePdf } from './parsers/pdf.js';
 import { extractRules } from '../extract/rules.js';
 import { transaction } from '../db.js';
 import { ensure } from '../errors.js';
@@ -8,11 +9,11 @@ import { ensure } from '../errors.js';
 export async function ingest(pool, { buffer, name, type, userId, extractor }) {
   name = path.basename(name ?? '');
   const extension = path.extname(name).toLowerCase();
-  ensure(['.json','.docx'].includes(extension), 415, 'Only DOCX and JSON files are supported');
+  ensure(['.json','.docx','.pdf'].includes(extension), 415, 'Only DOCX, PDF and JSON files are supported');
   ensure(['handbook','template','faq','config','training','playbook'].includes(type), 400, 'Unsupported artefact type');
   ensure(buffer?.length > 0 && buffer.length <= 5 * 1024 * 1024, 413, 'Upload must contain 1 byte to 5 MB');
-  const format = extension === '.json' ? 'JSON' : 'DOCX';
-  const parsed = format === 'JSON' ? parseJson(buffer) : await parseDocx(buffer);
+  const format = extension === '.json' ? 'JSON' : extension === '.pdf' ? 'PDF' : 'DOCX';
+  const parsed = format === 'JSON' ? parseJson(buffer) : format === 'PDF' ? await parsePdf(buffer) : await parseDocx(buffer);
   // Provider calls happen before opening a transaction. Extraction has no database handle.
   const results = [];
   for (const segment of parsed.segments) results.push(await extractRules(segment, { name, format, extractor }));

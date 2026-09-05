@@ -16,7 +16,10 @@ export function proposePatch(rule, change, segment, rawText) {
     start = rule.evidence_start + tokens[0].index;
     end = start + tokens[0][0].length;
   }
-  return { old: rawText.slice(start,end), new: String(change.new_value), start, end, base_version_id: segment.version_id };
+  // kind/verified distinguish this deterministic replacement from a model-drafted
+  // TEXT patch. Both travel the same approval path; only this one is checkable.
+  return { kind: 'VALUE', old: rawText.slice(start,end), new: String(change.new_value), start, end,
+    base_version_id: segment.version_id, verified: true };
 }
 
 // Rebase an evidence-anchored patch through every already-approved version.

@@ -11,7 +11,7 @@ CREATE TABLE concepts (
 );
 CREATE TABLE artefacts (
   id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL,
-  format TEXT NOT NULL CHECK (format IN ('DOCX','JSON')),
+  format TEXT NOT NULL CHECK (format IN ('DOCX','PDF','JSON')),
   current_version_id BIGINT, analysis_version_id BIGINT
 );
 CREATE TABLE artefact_versions (
@@ -82,7 +82,11 @@ CREATE TABLE impact_results (
   resolving_version_id BIGINT REFERENCES artefact_versions(id), resolved_at TIMESTAMPTZ,
   UNIQUE (change_id, segment_id),
   CONSTRAINT lexical_never_definitive CHECK (NOT (evidence_tier='LEXICAL' AND system_status='UPDATE_NEEDED')),
-  CONSTRAINT only_updates_patched CHECK (proposed_patch IS NULL OR (evidence_tier='STRUCTURED' AND system_status='UPDATE_NEEDED')),
+  CONSTRAINT only_updates_patched CHECK (proposed_patch IS NULL
+    OR (proposed_patch->>'kind' = 'VALUE' AND evidence_tier='STRUCTURED' AND system_status='UPDATE_NEEDED')
+    OR (proposed_patch->>'kind' = 'TEXT' AND system_status IN ('UPDATE_NEEDED','LEGAL_REVIEW_REQUIRED'))),
+  CONSTRAINT text_patch_unverified CHECK (proposed_patch IS NULL OR proposed_patch->>'kind' <> 'TEXT'
+    OR (proposed_patch->>'verified')::boolean IS FALSE),
   CONSTRAINT approver_is_not_proposer CHECK (approved_by IS NULL OR approved_by IS DISTINCT FROM edited_by),
   CHECK (approved_by IS NULL OR approved_by IS DISTINCT FROM submitted_by),
   CHECK ((workflow_state='RESOLVED') = (resolution IS NOT NULL)),

@@ -180,7 +180,9 @@ test('unknown config filenames have no inferred statutory rules; uploads validat
   assert.equal(unknown.body.rule_count,0);
   await h.api('post','/api/artefacts').field('type','config').attach('file',Buffer.from('{bad}'),'broken.json').expect(400);
   await h.api('post','/api/artefacts').field('type','handbook').attach('file',Buffer.from('not a zip'),'broken.docx').expect(400);
-  await h.api('post','/api/artefacts').field('type','handbook').attach('file',Buffer.from('pdf'),'file.pdf').expect(415);
+  // PDF is supported now, so a bogus one is a parse failure, not an unsupported type.
+  await h.api('post','/api/artefacts').field('type','handbook').attach('file',Buffer.from('pdf'),'file.pdf').expect(400);
+  await h.api('post','/api/artefacts').field('type','handbook').attach('file',Buffer.from('x'),'file.txt').expect(415);
 });
 
 test('password sign-in issues a working token, hides which credential was wrong, and preserves RBAC', async t => {
@@ -217,4 +219,44 @@ test('password sign-in issues a working token, hides which credential was wrong,
   // Password hashes are never returned by any user-facing route.
   const users = await request(app).get('/api/users').auth(rachel.body.token,{ type: 'bearer' }).expect(200);
   for (const row of users.body) assert.equal(row.password_hash,undefined);
+});
+
+test('a drafted text patch is marked unverified, editable as prose, and rewrites the clause on approval', async t => {
+  const { fixtureDrafter } = await import('../src/extract/providers.js');
+  const h = await harness(t);
+  // Rebuild the app with a drafter attached; the default harness has none.
+  const app = createApp({ pool: h.pool,secret,extractor: fixtureExtractor(),drafter: fixtureDrafter() });
+  const api = (method,url,role='reviewer') => request(app)[method](url)
+    .auth(role === 'approver' ? signToken('2',secret) : signToken('1',secret),{ type: 'bearer' });
+  for (const [name,type] of fixtures) {
+    await api('post','/api/artefacts').field('type',type).attach('file',await readFile(new URL(`../../fixtures/${name}`,import.meta.url)),name).expect(201);
+  }
+  const update = (await api('post','/api/regulatory-updates').send(payload).expect(201)).body;
+  await api('post',`/api/regulatory-updates/${update.id}/analyse`).expect(200);
+  const impacts = (await api('get',`/api/impacts?update_id=${update.id}`).expect(200)).body;
+
+  // The conditional clause fails the deterministic boundary, so it receives a
+  // drafted TEXT patch rather than nothing.
+  const drafted = impacts.find(i => i.system_status === 'LEGAL_REVIEW_REQUIRED' && i.proposed_patch);
+  assert.ok(drafted,'a legal-review finding should carry a drafted patch');
+  assert.equal(drafted.proposed_patch.kind,'TEXT');
+  assert.equal(drafted.proposed_patch.verified,false);
+  assert.equal(drafted.proposed_patch.drafted_by,'MODEL');
+
+  // A numeric patch keeps its verified, deterministic character.
+  const numeric = impacts.find(i => i.proposed_patch?.kind === 'VALUE');
+  assert.equal(numeric.proposed_patch.verified,true);
+
+  // A reviewer may rewrite the draft freely; prose is accepted where a VALUE
+  // patch would demand a number, and authorship flips to HUMAN.
+  const rewritten = 'Re-employment is offered at 63, subject to the conditions set out in the Act.';
+  const edited = (await api('patch',`/api/impacts/${drafted.id}/patch`).send({ revision: drafted.revision,new: rewritten }).expect(200)).body;
+  assert.equal(edited.proposed_patch.drafted_by,'HUMAN');
+  await api('patch',`/api/impacts/${numeric.id}/patch`).send({ revision: numeric.revision,new: 'sixty four' }).expect(400);
+
+  // Approval applies the prose and writes a new version containing it.
+  const submitted = (await api('post',`/api/impacts/${drafted.id}/submit`).send({ revision: edited.revision }).expect(200)).body;
+  const approved = (await api('post',`/api/impacts/${drafted.id}/approve`,'approver').send({ revision: submitted.revision }).expect(200)).body;
+  assert.ok(approved.version.raw_text.includes(rewritten));
+  assert.equal(approved.impact.resolution,'ACCEPTED');
 });

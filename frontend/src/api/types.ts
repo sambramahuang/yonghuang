@@ -29,13 +29,20 @@ export interface User {
   capability: Capability;
 }
 
-/** A patch is always a literal string replacement over a known span. */
+/**
+ * A patch replaces a known span. VALUE patches are deterministic - the old text
+ * is a number matched literally. TEXT patches are model-drafted prose that no
+ * rule can verify, so they carry `verified: false` and must be shown differently.
+ */
 export interface ProposedPatch {
   start: number;
   end: number;
   old: string;
   new: string;
   base_version_id: number;
+  kind?: "VALUE" | "TEXT";
+  verified?: boolean;
+  drafted_by?: "MODEL" | "HUMAN";
 }
 
 export interface ImpactSummary {

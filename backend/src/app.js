@@ -9,7 +9,7 @@ import { analyse } from './impact/match.js';
 import { editPatch, submit, approve, resolve } from './workflow/review.js';
 import { artefactDetail, impactDetail, listImpacts } from './queries.js';
 
-export function createApp({ pool, secret, extractor, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
+export function createApp({ pool, secret, extractor, drafter = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
   const app = express();
   app.disable('x-powered-by');
   // Accepts a comma-separated list so Vite's port fallback (5173 -> 5174) does
@@ -65,7 +65,7 @@ export function createApp({ pool, secret, extractor, extractionMode = 'fixture',
     ensure(update,404,'Regulatory update not found');
     res.json({ ...update,changes: (await pool.query('SELECT * FROM regulatory_changes WHERE update_id=$1 ORDER BY id',[req.params.id])).rows });
   });
-  app.post('/api/regulatory-updates/:id/analyse',reviewer,async (req,res) => res.json(await analyse(pool,req.params.id)));
+  app.post('/api/regulatory-updates/:id/analyse',reviewer,async (req,res) => res.json(await analyse(pool,req.params.id,undefined,drafter)));
   app.get('/api/impacts',async (req,res) => res.json(await listImpacts(pool,req.query)));
   app.get('/api/impacts/:id',async (req,res) => res.json(await impactDetail(pool,req.params.id)));
   app.patch('/api/impacts/:id/patch',reviewer,async (req,res) => res.json(await editPatch(pool,req.params.id,req.user,req.body ?? {})));
