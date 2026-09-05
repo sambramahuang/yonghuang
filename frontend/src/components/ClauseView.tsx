@@ -4,6 +4,7 @@ import { getBlastRadiusForChange, getCategoryBreakdown } from "../lib/legalGraph
 import { AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
 import type { Clause, FirmDocument } from "../types";
 import Redline from "./Redline";
+import StatusBadge from "./StatusBadge";
 
 interface Props {
   clause: Clause;
@@ -32,72 +33,67 @@ export default function ClauseView({ clause, documents, onToggleApproval }: Prop
     .join(" · ");
 
   return (
-    <div
-      className={`relative rounded-xl p-[18px] ${
-        change ? `border-l-[3px] ${cfg.border} ${cfg.bg}` : `border-l-2 ${cfg.border} bg-surface`
-      }`}
-    >
+    <div className="rounded-xl border border-line bg-surface p-[18px] shadow-sm">
       <div className="flex items-start justify-between gap-2.5">
-        <div className="flex items-start gap-2.5">
-          {change && <cfg.icon size={15} className={`mt-0.5 shrink-0 ${cfg.text}`} strokeWidth={2.25} />}
-          <div className="min-w-0 flex-1">
-            <p className="text-[14.5px] font-semibold text-ink">{clause.heading}</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
-              {clause.status === "change" && change?.redline ? (
-                <Redline segments={change.redline} approved={change.approved} />
-              ) : (
-                clause.text
-              )}
-            </p>
-          </div>
-        </div>
-        {clause.status === "change" && change && (
-          <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-              change.approved
-                ? "border-good-line bg-good-bg text-good"
-                : "border-bad-line bg-bad-bg text-bad"
-            }`}
-          >
-            {change.approved ? "Approved" : "Pending approval"}
-          </span>
-        )}
+        <p className="text-[14.5px] font-semibold text-ink">{clause.heading}</p>
+        <StatusBadge status={clause.status} size="sm" />
       </div>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
+        {clause.status === "change" && change?.redline ? (
+          <Redline segments={change.redline} approved={change.approved} />
+        ) : (
+          clause.text
+        )}
+      </p>
 
       {change && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pl-6">
-          <span className="inline-flex items-center gap-1.5 text-xs text-ink-soft">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 text-xs italic text-ink-faint">
             {AuthorityIcon && <AuthorityIcon size={12} className="text-ink-faint" />}
-            <span className="font-medium text-ink">Authority:</span> {change.authority}
+            {change.authority}
           </span>
 
-          {clause.status === "change" && (
-            <button
-              type="button"
-              onClick={() => onToggleApproval(clause.id, !change.approved)}
-              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
-                change.approved
-                  ? "border-line text-ink-soft hover:bg-surface-2"
-                  : "border-good-line bg-good-bg text-good hover:opacity-80"
-              }`}
-            >
-              {change.approved ? (
-                <>
-                  <Undo2 size={11} /> Unapprove
-                </>
-              ) : (
-                <>
-                  <Check size={11} /> Approve suggestion
-                </>
-              )}
-            </button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {clause.status === "change" && (
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                  change.approved
+                    ? "border-good-line bg-good-bg text-good"
+                    : "border-bad-line bg-bad-bg text-bad"
+                }`}
+              >
+                {change.approved ? "Approved" : "Pending approval"}
+              </span>
+            )}
+
+            {clause.status === "change" && (
+              <button
+                type="button"
+                onClick={() => onToggleApproval(clause.id, !change.approved)}
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                  change.approved
+                    ? "border-line text-ink-soft hover:bg-surface-2"
+                    : "border-good-line bg-good-bg text-good hover:opacity-80"
+                }`}
+              >
+                {change.approved ? (
+                  <>
+                    <Undo2 size={11} /> Unapprove
+                  </>
+                ) : (
+                  <>
+                    <Check size={11} /> Approve suggestion
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {change && (
         <>
-          <div className="mt-2 pl-6">
+          <div className="mt-2">
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -109,7 +105,7 @@ export default function ClauseView({ clause, documents, onToggleApproval }: Prop
           </div>
 
           {open && (
-            <div className="mt-2 rounded-xl border border-line bg-surface p-5 shadow-md sm:ml-6">
+            <div className="mt-2 rounded-xl border border-line bg-surface p-5 shadow-md">
               <div className="flex items-center justify-between gap-2">
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${cfg.bg} ${cfg.text} ${cfg.border}`}>
                   <cfg.icon size={12} /> {cfg.label} · {AUTHORITY_TYPE_LABEL[change.authorityType]}

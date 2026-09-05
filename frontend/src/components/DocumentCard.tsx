@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { getBlastRadiusForDocument, getChangedClauses } from "../lib/legalGraph";
 import { STATUS_CONFIG } from "../statusConfig";
 import type { ChangeStatus, FirmDocument } from "../types";
@@ -21,9 +21,9 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl border-l-[3px] p-[18px] text-left transition ${cfg.border} ${
+      className={`w-full rounded-xl p-[18px] text-left transition ${
         active
-          ? `${cfg.bg} border shadow-md`
+          ? `${cfg.bg} shadow-md`
           : "border border-line bg-surface shadow-sm hover:shadow-md"
       }`}
     >
@@ -47,8 +47,8 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
           </span>
         )}
         {blastRadius > 0 && (
-          <span className="inline-flex items-center gap-1 font-mono text-ink-soft">
-            <GitBranch size={12} /> Blast radius {blastRadius}
+          <span className="inline-flex items-center gap-1 font-semibold text-brand">
+            <Link2 size={12} /> Blast radius {blastRadius}
           </span>
         )}
       </div>
