@@ -24,8 +24,11 @@ export function getDocumentById(
   return documents.find((d) => d.id === id);
 }
 
+// Clauses still carrying open work. A clause whose change has been accepted or
+// rejected keeps its change for the audit trail, but drops to "no_change" — it
+// no longer counts as flagged, and no longer propagates a blast radius.
 export function getChangedClauses(doc: FirmDocument): Clause[] {
-  return doc.clauses.filter((c) => c.change);
+  return doc.clauses.filter((c) => c.change && c.status !== "no_change");
 }
 
 export interface BlastRadiusEntry {
@@ -43,7 +46,7 @@ export function getBlastRadiusForChange(
   const entries: BlastRadiusEntry[] = [];
   for (const doc of documents) {
     if (doc.id === excludeDocumentId) continue;
-    for (const clause of doc.clauses) {
+    for (const clause of getChangedClauses(doc)) {
       if (clause.change && clause.change.authority === change.authority) {
         entries.push({ document: doc, clause, change: clause.change });
       }

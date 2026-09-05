@@ -676,6 +676,55 @@
         }
       }
     },
+    "/impacts/{id}/accept": {
+      "post": {
+        "summary": "APPROVER: accept a finding that proposes no edit; no version is written",
+        "operationId": "post__impacts_id_accept",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Impact"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Request failed; see error message and HTTP status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Revision"
+              }
+            }
+          }
+        }
+      }
+    },
     "/impacts/{id}/reject": {
       "post": {
         "summary": "APPROVER: reject a finding without changing content",

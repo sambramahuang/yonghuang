@@ -26,6 +26,12 @@ export interface TextSegment {
   kind: "same" | "deleted" | "inserted";
 }
 
+// How a reviewer closed a suggested change. Once set, the clause is settled:
+// its status drops to "no_change" and the redline is resolved away — accepting
+// deletes the original text and keeps the new wording, rejecting drops the
+// proposal and keeps the original.
+export type ChangeResolution = "accepted" | "rejected" | "escalated";
+
 export interface SuggestedChange {
   id: string;
   authority: string; // e.g. "Goh v Straits Manufacturing Pte Ltd [2026] SGCA 7"
@@ -35,6 +41,17 @@ export interface SuggestedChange {
   detail: string; // longer explanation
   redline?: TextSegment[]; // present once the exact edit is known (status "change")
   approved: boolean; // has a reviewing lawyer signed off on this suggested edit
+  resolution?: ChangeResolution | null; // null while the change is still open
+  // An exact edit exists to apply. Uncertainties usually carry none: there is
+  // a flag to decide, but no text the machine is willing to rewrite.
+  hasPatch?: boolean;
+  // The current proposed replacement text, editable before it is submitted or
+  // approved. Present only alongside hasPatch.
+  patchText?: string;
+  // The edit is still a draft. Separation of duties is enforced end to end —
+  // the approver may not be the person who submitted it — so a draft must be
+  // submitted by a reviewer before an approver can accept it.
+  awaitingSubmission?: boolean;
 }
 
 export interface Clause {

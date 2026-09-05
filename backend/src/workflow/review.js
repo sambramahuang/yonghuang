@@ -90,6 +90,38 @@ export async function approve(pool, id, user, { revision }) {
   });
 }
 
+/**
+ * Accepts a finding that has nothing to apply.
+ *
+ * POSSIBLE_IMPACT findings — and any legal-review finding the drafter declined
+ * to draft for — carry no proposed patch, so there is no text to write and no
+ * new version to create. Accepting one records that a human read the flag and
+ * that the artefact stands as it is. A finding that *does* carry a patch is
+ * refused here: applying an edit still goes through submit + approve, so this
+ * is never a route to resolving an edit without writing it.
+ *
+ * `resolving_version_id` is set to the artefact's current version — the schema
+ * requires an ACCEPTED resolution to name the version it was resolved against,
+ * and with no patch applied that is simply the version already in force.
+ */
+export async function acceptNoEdit(pool, id, user, { revision, note = '' }) {
+  ensure(user.capability === 'APPROVER', 403, 'APPROVER capability is required');
+  ensure(typeof note === 'string' && note.length <= 5000, 400, 'note must contain at most 5000 characters');
+  return transaction(pool, async db => {
+    const ref = (await db.query(`SELECT a.current_version_id FROM impact_results i
+      JOIN artefact_segments s ON s.id=i.segment_id
+      JOIN artefact_versions v ON v.id=s.version_id
+      JOIN artefacts a ON a.id=v.artefact_id WHERE i.id=$1`, [id])).rows[0];
+    ensure(ref, 404, 'Impact not found');
+    const impact = await lockImpact(db, id, revision);
+    ensure(!impact.proposed_patch, 409, 'This finding has a proposed patch; submit and approve it instead');
+    await db.query(`UPDATE impact_results SET resolution='ACCEPTED',workflow_state='RESOLVED',approved_by=$2,resolved_by=$2,
+      resolving_version_id=$3,resolved_at=now(),revision=revision+1 WHERE id=$1`, [id,user.id,ref.current_version_id]);
+    await audit(db,id,user.id,'ACCEPTED_NO_EDIT',{ version_id: ref.current_version_id, note });
+    return getImpact(db,id);
+  });
+}
+
 export async function resolve(pool, id, user, { revision, rejection_reason, note = '' }, resolution) {
   ensure(['REJECTED','ESCALATED'].includes(resolution), 400, 'Unsupported resolution');
   if (resolution === 'REJECTED') ensure(user.capability === 'APPROVER', 403, 'APPROVER capability is required');

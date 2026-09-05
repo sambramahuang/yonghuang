@@ -12,8 +12,9 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:3001/api";
 
-// The token returned by POST /api/login is kept in localStorage so a page
-// reload does not drop the session mid-demo.
+// The backend has no login route by design: tokens are minted by an operator
+// (`npm run token -- reviewer|approver`) and pasted in. We keep the active one
+// in localStorage so a page reload does not drop the session mid-demo.
 const TOKEN_KEY = "yonghuang.token";
 
 export function getToken(): string {
@@ -51,8 +52,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     response = await fetch(`${BASE}${path}`, {
       ...init,
       headers: {
-        // FormData must keep the browser-generated multipart boundary.
-        ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
@@ -90,22 +90,12 @@ export const api = {
   users: () => request<User[]>("/users"),
 
   artefacts: () => request<Artefact[]>("/artefacts"),
+  // Full text: every segment of the artefact's analysed version, not just the
+  // ones with a finding, so the reader sees the whole document in context.
   artefact: (id: string) =>
-    request<Artefact & { segments: unknown[]; rules: unknown[]; current_version: { raw_text: string } }>(
-      `/artefacts/${id}`,
-    ),
-
-  /**
-   * Multipart upload. The Content-Type header is deliberately left unset so the
-   * browser supplies it with the multipart boundary; setting it by hand
-   * produces a body the server cannot parse.
-   */
-  uploadArtefact: (file: File, type: string) => {
-    const body = new FormData();
-    body.append("type", type);
-    body.append("file", file);
-    return request<Artefact>("/artefacts", { method: "POST", body });
-  },
+    request<
+      Artefact & { segments: { id: number; ordinal: number; locator: string; text: string; char_start: number }[] }
+    >(`/artefacts/${id}`),
 
   regulatoryUpdates: () => request<RegulatoryUpdate[]>("/regulatory-updates"),
   analyse: (updateId: string) =>
@@ -133,6 +123,9 @@ export const api = {
   // artefact version the approval created.
   approve: (id: string, revision: number) =>
     post<{ impact: ImpactDetail; version: ArtefactVersion }>(`/impacts/${id}/approve`, { revision }),
+  // Accepts a finding that proposes no edit — nothing is written to the
+  // artefact, the finding is simply resolved as accepted.
+  accept: (id: string, revision: number) => post<ImpactDetail>(`/impacts/${id}/accept`, { revision }),
   reject: (id: string, revision: number, rejection_reason: RejectionReason) =>
     post<ImpactDetail>(`/impacts/${id}/reject`, { revision, rejection_reason }),
   escalate: (id: string, revision: number) => post<ImpactDetail>(`/impacts/${id}/escalate`, { revision }),

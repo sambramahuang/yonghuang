@@ -14,7 +14,7 @@ export default function StatusBadge({ status, size = "md" }: Props) {
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border font-medium ${cfg.bg} ${cfg.text} ${cfg.border} ${padding}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border font-medium ${cfg.bg} ${cfg.text} ${cfg.border} ${padding}`}
     >
       <Icon size={iconSize} strokeWidth={2.25} />
       {cfg.short}

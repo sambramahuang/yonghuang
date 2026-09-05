@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
 import type { ImpactSummary, ProposedPatch, SystemStatus } from "../api/types";
-import type { ChangeStatus, Clause, FirmDocType, FirmDocument, TextSegment } from "../types";
+import type {
+  ChangeResolution,
+  ChangeStatus,
+  Clause,
+  FirmDocType,
+  FirmDocument,
+  TextSegment,
+} from "../types";
 
 /**
  * Adapts the backend's artefacts and impact findings into the FirmDocument
@@ -70,6 +77,27 @@ function toRedline(text: string, patch: ProposedPatch | null, offset: number): T
   return segments.filter((s) => s.text.length > 0);
 }
 
+/**
+ * The clause text once an accepted patch has been applied — the same splice the
+ * backend performs when it writes the new version, done locally so the clause
+ * reads as settled prose the moment the approval lands, without waiting for the
+ * next analysis run to re-segment the artefact.
+ */
+function applyPatch(text: string, patch: ProposedPatch | null, offset: number): string {
+  if (!patch) return text;
+  if (patch.kind === "TEXT") return patch.new;
+  const start = patch.start - offset;
+  const end = patch.end - offset;
+  if (start < 0 || end > text.length || start >= end) return text.replace(patch.old, patch.new);
+  return text.slice(0, start) + patch.new + text.slice(end);
+}
+
+const RESOLUTION: Record<string, ChangeResolution> = {
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+  ESCALATED: "escalated",
+};
+
 interface Segment {
   id: number;
   ordinal: number;
@@ -80,10 +108,12 @@ interface Segment {
 
 /**
  * One clause per segment, so the reader sees the whole document and can judge
- * a flagged paragraph in its own context. A segment with no finding is plain
- * text with status "no_change"; a finding contributes the status and redline.
+ * a flagged paragraph in its own context — not just the isolated paragraphs
+ * that happen to carry a finding. A segment with no finding is plain text
+ * with status "no_change"; a finding contributes the status, redline, and the
+ * accept/reject/submit workflow state.
  */
-function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | undefined, updateTitles: Map<string, string>): Clause {
+function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | undefined, updateTitle: string): Clause {
   const text = segment.text ?? "";
   const base: Clause = {
     id: impact ? `impact-${impact.id}` : `segment-${segment.id}`,
@@ -97,19 +127,30 @@ function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | 
   // Patch offsets are absolute within the version's raw_text; the segment's
   // own start rebases them onto this clause.
   const patch = impact.proposed_patch;
-  const authority = updateTitles.get(String(impact.update_id)) ?? "Regulatory update";
+  const offset = segment.char_start;
+  // A resolved finding is settled: it no longer flags the document, so it
+  // drops to "no change" and the redline collapses into plain text — the
+  // accepted wording if it was approved, the untouched original if not.
+  const resolution = impact.resolution ? RESOLUTION[impact.resolution] : null;
+  const settledText = resolution === "accepted" ? applyPatch(text, patch, offset) : text;
+
   return {
     ...base,
-    status: STATUS[impact.system_status] ?? "uncertain",
+    text: settledText,
+    status: resolution ? "no_change" : STATUS[impact.system_status] ?? "uncertain",
     change: {
       id: `change-${impact.id}`,
-      authority,
+      authority: updateTitle,
       authorityType: "statute",
       date: impact.resolved_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       summary: impact.explanation,
       detail: impact.explanation,
-      redline: toRedline(text, patch, segment.char_start),
+      redline: resolution ? undefined : toRedline(text, patch, offset),
       approved: impact.resolution === "ACCEPTED",
+      resolution,
+      hasPatch: !!patch,
+      patchText: patch?.new,
+      awaitingSubmission: !!patch && impact.workflow_state === "DRAFT",
     },
   };
 }
@@ -141,6 +182,8 @@ export function useLiveDocuments(token: string): LiveState {
     (async () => {
       try {
         const [artefacts, updates] = await Promise.all([api.artefacts(), api.regulatoryUpdates()]);
+        // Each finding belongs to a specific regulatory update — look its own
+        // title up rather than assuming every finding is against the first one.
         const updateTitles = new Map(updates.map((u) => [String(u.id), u.title]));
         const impacts = await api.impacts();
         if (!live) return;
@@ -152,24 +195,39 @@ export function useLiveDocuments(token: string): LiveState {
           byArtefact.get(key)!.push(impact);
         }
 
-        // Render the list from the summary data first. Fetching every
-        // artefact's full text before the first paint left the sign-in button
-        // spinning for seconds on a corpus of this size.
-        const shell = (detailFor: Map<string, { segments?: Segment[] }>) =>
-          artefacts.map((a) => {
+        // Fetch each artefact in full so the reader sees the whole document,
+        // not only the paragraphs that happen to carry a finding.
+        const details = await Promise.all(
+          artefacts.map(async (a) => {
+            try {
+              return { a, detail: await api.artefact(String(a.id)) };
+            } catch {
+              return { a, detail: null };
+            }
+          }),
+        );
+        if (!live) return;
+
+        setDocuments(
+          details.map(({ a, detail }) => {
             const found = byArtefact.get(String(a.id)) ?? [];
+            // Resolved findings stay on the document as settled clauses, but
+            // they are no longer open work, so the summary counts only the rest.
+            const open = found.filter((i) => i.resolution === null);
+            const updateTitleFor = (updateId: string) => updateTitles.get(updateId) ?? "a regulatory update";
             const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
-            const segments = detailFor.get(String(a.id))?.segments ?? [];
+            const segments = detail?.segments ?? [];
             const clauses = segments.length
-              ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitles))
+              ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitleFor(bySegment.get(String(seg.id))?.update_id ?? "")))
               : found.map((i) =>
                   toClause(
                     { id: Number(i.segment_id), ordinal: 0, locator: i.locator, text: i.segment_text ?? "", char_start: 0 },
                     String(a.id),
                     i,
-                    updateTitles,
+                    updateTitleFor(i.update_id),
                   ),
                 );
+            const openUpdateNames = [...new Set(open.map((i) => updateTitleFor(i.update_id)))];
             return {
               id: `artefact-${a.id}`,
               title: a.name,
@@ -178,32 +236,15 @@ export function useLiveDocuments(token: string): LiveState {
               client: "Firm-wide",
               practiceAreas: [...new Set(found.map((i) => i.concept))].slice(0, 3),
               lastUpdated: new Date().toISOString().slice(0, 10),
-              summary: found.length
-                ? `${found.length} finding${found.length === 1 ? "" : "s"} against ${
-                    [...new Set(found.map((i) => updateTitles.get(String(i.update_id)) ?? "a regulatory update"))].join("; ")
-                  }.`
-                : "No findings against any current regulatory update.",
+              summary: open.length
+                ? `${open.length} open finding${open.length === 1 ? "" : "s"} against ${openUpdateNames.join("; ")}.`
+                : found.length
+                  ? `All ${found.length} finding${found.length === 1 ? "" : "s"} have been resolved.`
+                  : "No findings against any current regulatory update.",
               clauses,
             };
-          });
-
-        const details = new Map<string, { segments?: Segment[] }>();
-        setDocuments(shell(details));
-        setLoading(false);
-
-        // Then fill in full text per artefact, refreshing as each arrives.
-        await Promise.all(
-          artefacts.map(async (a) => {
-            try {
-              const detail = await api.artefact(String(a.id));
-              details.set(String(a.id), detail as { segments?: Segment[] });
-              if (live) setDocuments(shell(details));
-            } catch {
-              /* a document that will not load simply keeps its finding-only view */
-            }
           }),
         );
-        if (!live) return;
         setError(null);
       } catch (e) {
         if (live) setError(e instanceof ApiError ? e.message : "Failed to load documents");

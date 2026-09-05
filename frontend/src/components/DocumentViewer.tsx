@@ -7,9 +7,9 @@ import {
   getEffectiveStatus,
   summarizeChanges,
 } from "../lib/legalGraph";
-import type { User } from "../api/types";
+import type { RejectionReason } from "../api/types";
 import type { FirmDocument } from "../types";
-import DocumentPaper from "./DocumentPaper";
+import DocumentPaper, { type ResolveAction } from "./DocumentPaper";
 import ImpactGraphModal from "./ImpactGraphModal";
 import StatusBadge from "./StatusBadge";
 import SummaryModal from "./SummaryModal";
@@ -17,12 +17,20 @@ import SummaryModal from "./SummaryModal";
 interface Props {
   doc: FirmDocument;
   documents: FirmDocument[];
-  user: User | null;
-  impactIdFor: (clauseId: string) => string | null;
-  reload: () => void;
+  canApprove: boolean;
+  canSubmit: boolean;
+  busyClauseId: string | null;
+  onResolve: (documentId: string, clauseId: string, action: ResolveAction, reason?: RejectionReason, text?: string) => void;
 }
 
-export default function DocumentViewer({ doc, documents, user, impactIdFor, reload }: Props) {
+export default function DocumentViewer({
+  doc,
+  documents,
+  canApprove,
+  canSubmit,
+  busyClauseId,
+  onResolve,
+}: Props) {
   const [showSummary, setShowSummary] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -41,7 +49,7 @@ export default function DocumentViewer({ doc, documents, user, impactIdFor, relo
       changes: summary.bullets.map((b) => ({
         clause: b.clauseHeading,
         authority: b.change.authority,
-        status: b.change.approved ? "approved" : "unapproved",
+        status: b.change.resolution ?? "open",
         summary: b.change.summary,
         detail: b.change.detail,
       })),
@@ -73,7 +81,7 @@ export default function DocumentViewer({ doc, documents, user, impactIdFor, relo
               <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                 {doc.type} · {doc.client}
               </p>
-              <h2 className="mt-1 break-words text-[19px] font-bold leading-snug tracking-tight text-ink">
+              <h2 className="mt-1 text-[19px] font-bold leading-snug tracking-tight text-ink">
                 {doc.title}
               </h2>
               <p className="mt-1 font-mono text-[11.5px] text-ink-soft">{doc.citation}</p>
@@ -129,7 +137,14 @@ export default function DocumentViewer({ doc, documents, user, impactIdFor, relo
         </div>
 
         <div className="flex-1 overflow-y-auto bg-surface-2 p-8">
-          <DocumentPaper doc={doc} documents={documents} user={user} impactIdFor={impactIdFor} reload={reload} />
+          <DocumentPaper
+            doc={doc}
+            documents={documents}
+            canApprove={canApprove}
+            canSubmit={canSubmit}
+            busyClauseId={busyClauseId}
+            onResolve={(clauseId, action, reason, text) => onResolve(doc.id, clauseId, action, reason, text)}
+          />
         </div>
 
         <button
