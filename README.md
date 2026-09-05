@@ -38,12 +38,9 @@ This development machine already has `.env` configured for the isolated database
 
 ## Seeded accounts
 
-Sign in at the dashboard with the seeded demo credentials:
-
-| username | password | capability |
-|---|---|---|
-| `rachel` | `reviewer123` | REVIEWER — Rachel Tan, edits and submits patches |
-| `daniel` | `approver123` | APPROVER — Daniel Lim, approves, writing a new version |
+Two accounts are seeded by migration 2: Rachel Tan (REVIEWER) and Daniel Lim (APPROVER). Their
+sign-in credentials are written to `backend/config/demo-accounts.md`, which is gitignored — the
+passwords are deliberately kept out of the repository and off the login screen.
 
 `POST /api/login` takes `{username, password}` and returns a signed eight-hour bearer token plus the
 user record. Passwords are stored as salted scrypt hashes (Node's standard library, no new
