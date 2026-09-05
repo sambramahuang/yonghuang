@@ -51,7 +51,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     response = await fetch(`${BASE}${path}`, {
       ...init,
       headers: {
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        // FormData must keep the browser-generated multipart boundary.
+        ...(init.body && !(init.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
@@ -93,6 +94,18 @@ export const api = {
     request<Artefact & { segments: unknown[]; rules: unknown[]; current_version: { raw_text: string } }>(
       `/artefacts/${id}`,
     ),
+
+  /**
+   * Multipart upload. The Content-Type header is deliberately left unset so the
+   * browser supplies it with the multipart boundary; setting it by hand
+   * produces a body the server cannot parse.
+   */
+  uploadArtefact: (file: File, type: string) => {
+    const body = new FormData();
+    body.append("type", type);
+    body.append("file", file);
+    return request<Artefact>("/artefacts", { method: "POST", body });
+  },
 
   regulatoryUpdates: () => request<RegulatoryUpdate[]>("/regulatory-updates"),
   analyse: (updateId: string) =>

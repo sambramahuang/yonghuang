@@ -1,5 +1,6 @@
 import { CheckCircle2, FileUp, GitBranch, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
+import { api, ApiError } from "../api/client";
 import {
   findDocumentsByAuthority,
   getAllAuthorities,
@@ -38,6 +39,45 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
   const [redlineAfter, setRedlineAfter] = useState("");
 
   const [result, setResult] = useState<IngestResult | null>(null);
+
+  // Uploading a firm document is a different action from logging a change
+  // against an existing clause: the file goes to the backend, which parses it,
+  // extracts claims and analyses it against every stored regulatory update.
+  const [artefactType, setArtefactType] = useState("handbook");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploaded, setUploaded] = useState<string | null>(null);
+
+  async function handleUpload() {
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    setUploaded(null);
+    try {
+      const artefact = await api.uploadArtefact(file, artefactType);
+      setUploaded(artefact.name ?? file.name);
+      setFile(null);
+      onIngested({ documents } as IngestResult);
+
+      // Analysis runs against every stored update so the new document is
+      // compared with the same changes as the rest of the corpus. It is not
+      // awaited: ingestion has already succeeded, and analysis of a large
+      // corpus takes long enough that blocking the button reads as a hang.
+      void (async () => {
+        try {
+          const updates = await api.regulatoryUpdates();
+          for (const update of updates) await api.analyse(String(update.id)).catch(() => {});
+          onIngested({ documents } as IngestResult);
+        } catch {
+          /* the document is ingested either way; findings appear on next load */
+        }
+      })();
+    } catch (e) {
+      setUploadError(e instanceof ApiError ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const originDoc = documents.find((d) => d.id === originDocumentId) ?? null;
   const knownAuthorities = useMemo(() => getAllAuthorities(documents), [documents]);
@@ -165,6 +205,53 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
           </>
         )}
       </label>
+
+      {file && (
+        <div
+          className="mt-3 rounded-xl border border-line bg-surface p-3.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-xs font-semibold text-ink">Ingest this document into the corpus</p>
+          <p className="mt-0.5 text-xs text-ink-faint">
+            The backend parses it, extracts claims and analyses it against every stored update.
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <select
+              value={artefactType}
+              onChange={(e) => setArtefactType(e.target.value)}
+              disabled={uploading}
+              aria-label="Document type"
+              className="rounded-lg border border-line bg-surface-2 px-2 py-1.5 text-sm text-ink"
+            >
+              <option value="handbook">Handbook / manual</option>
+              <option value="template">Template / agreement</option>
+              <option value="playbook">Playbook</option>
+              <option value="faq">FAQ</option>
+              <option value="checklist">Checklist</option>
+              <option value="config">Config (JSON)</option>
+              <option value="training">Training material</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleUpload}
+              disabled={uploading}
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-40"
+            >
+              {uploading ? "Ingesting…" : "Ingest document"}
+            </button>
+          </div>
+          {uploadError && (
+            <p role="alert" className="mt-2 rounded-lg border border-bad-line bg-bad-bg px-2.5 py-1.5 text-xs text-bad">
+              {uploadError}
+            </p>
+          )}
+        </div>
+      )}
+      {uploaded && (
+        <p className="mt-3 rounded-xl border border-good-line bg-good-bg px-3 py-2 text-sm text-good">
+          Ingested {uploaded}. It now appears in the document list with any findings.
+        </p>
+      )}
 
       <div className="space-y-4 rounded-2xl border border-line bg-surface p-7 shadow-sm">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
