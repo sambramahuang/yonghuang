@@ -70,22 +70,36 @@ function toRedline(text: string, patch: ProposedPatch | null, offset: number): T
   return segments.filter((s) => s.text.length > 0);
 }
 
-function toClause(impact: ImpactSummary, updateTitle: string): Clause {
-  // segment_text is the clause; patch offsets are absolute, so the clause's
-  // own start is needed to place the redline within it. The list endpoint does
-  // not carry char_start, so a VALUE patch is located by its old value instead.
-  const text = impact.segment_text ?? "";
-  const patch = impact.proposed_patch;
-  let offset = 0;
-  if (patch && patch.kind !== "TEXT") {
-    const local = text.indexOf(patch.old);
-    offset = local >= 0 ? patch.start - local : patch.start;
-  }
-  return {
-    id: `impact-${impact.id}`,
-    documentId: `artefact-${impact.artefact_id}`,
-    heading: impact.locator ? `${impact.locator} — ${impact.concept}` : impact.concept,
+interface Segment {
+  id: number;
+  ordinal: number;
+  locator: string;
+  text: string;
+  char_start: number;
+}
+
+/**
+ * One clause per segment, so the reader sees the whole document and can judge
+ * a flagged paragraph in its own context. A segment with no finding is plain
+ * text with status "no_change"; a finding contributes the status and redline.
+ */
+function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | undefined, updateTitle: string): Clause {
+  const text = segment.text ?? "";
+  const base: Clause = {
+    id: impact ? `impact-${impact.id}` : `segment-${segment.id}`,
+    documentId: `artefact-${artefactId}`,
+    heading: segment.locator,
     text,
+    status: "no_change",
+  };
+  if (!impact) return base;
+
+  // Patch offsets are absolute within the version's raw_text; the segment's
+  // own start rebases them onto this clause.
+  const patch = impact.proposed_patch;
+  return {
+    ...base,
+    heading: `${segment.locator} — ${impact.concept}`,
     status: STATUS[impact.system_status] ?? "uncertain",
     change: {
       id: `change-${impact.id}`,
@@ -94,7 +108,7 @@ function toClause(impact: ImpactSummary, updateTitle: string): Clause {
       date: impact.resolved_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       summary: impact.explanation,
       detail: impact.explanation,
-      redline: toRedline(text, patch, offset),
+      redline: toRedline(text, patch, segment.char_start),
       approved: impact.resolution === "ACCEPTED",
     },
   };
@@ -138,9 +152,34 @@ export function useLiveDocuments(token: string): LiveState {
           byArtefact.get(key)!.push(impact);
         }
 
+        // Fetch each artefact in full so the reader sees the whole document,
+        // not only the paragraphs that happen to carry a finding.
+        const details = await Promise.all(
+          artefacts.map(async (a) => {
+            try {
+              return { a, detail: await api.artefact(String(a.id)) };
+            } catch {
+              return { a, detail: null };
+            }
+          }),
+        );
+        if (!live) return;
+
         setDocuments(
-          artefacts.map((a) => {
+          details.map(({ a, detail }) => {
             const found = byArtefact.get(String(a.id)) ?? [];
+            const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
+            const segments = (detail?.segments ?? []) as Segment[];
+            const clauses = segments.length
+              ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitle))
+              : found.map((i) =>
+                  toClause(
+                    { id: Number(i.segment_id), ordinal: 0, locator: i.locator, text: i.segment_text ?? "", char_start: 0 },
+                    String(a.id),
+                    i,
+                    updateTitle,
+                  ),
+                );
             return {
               id: `artefact-${a.id}`,
               title: a.name,
@@ -152,7 +191,7 @@ export function useLiveDocuments(token: string): LiveState {
               summary: found.length
                 ? `${found.length} finding${found.length === 1 ? "" : "s"} against ${updateTitle}.`
                 : "No findings against the current regulatory update.",
-              clauses: found.map((i) => toClause(i, updateTitle)),
+              clauses,
             };
           }),
         );

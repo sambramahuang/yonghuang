@@ -12,9 +12,8 @@ import type {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:3001/api";
 
-// The backend has no login route by design: tokens are minted by an operator
-// (`npm run token -- reviewer|approver`) and pasted in. We keep the active one
-// in localStorage so a page reload does not drop the session mid-demo.
+// The token returned by POST /api/login is kept in localStorage so a page
+// reload does not drop the session mid-demo.
 const TOKEN_KEY = "yonghuang.token";
 
 export function getToken(): string {
@@ -90,6 +89,10 @@ export const api = {
   users: () => request<User[]>("/users"),
 
   artefacts: () => request<Artefact[]>("/artefacts"),
+  artefact: (id: string) =>
+    request<Artefact & { segments: unknown[]; rules: unknown[]; current_version: { raw_text: string } }>(
+      `/artefacts/${id}`,
+    ),
 
   regulatoryUpdates: () => request<RegulatoryUpdate[]>("/regulatory-updates"),
   analyse: (updateId: string) =>
