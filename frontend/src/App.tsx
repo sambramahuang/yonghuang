@@ -219,7 +219,7 @@ function LawyerApp() {
             )}
           </div>
 
-          <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-140px)]">
+          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-90px)]">
             {selected ? (
               <DocumentViewer
                 doc={selected}

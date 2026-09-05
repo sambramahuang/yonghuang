@@ -83,7 +83,7 @@ interface Segment {
  * a flagged paragraph in its own context. A segment with no finding is plain
  * text with status "no_change"; a finding contributes the status and redline.
  */
-function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | undefined, updateTitle: string): Clause {
+function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | undefined, updateTitles: Map<string, string>): Clause {
   const text = segment.text ?? "";
   const base: Clause = {
     id: impact ? `impact-${impact.id}` : `segment-${segment.id}`,
@@ -97,13 +97,13 @@ function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | 
   // Patch offsets are absolute within the version's raw_text; the segment's
   // own start rebases them onto this clause.
   const patch = impact.proposed_patch;
+  const authority = updateTitles.get(String(impact.update_id)) ?? "Regulatory update";
   return {
     ...base,
-    heading: `${segment.locator} — ${impact.concept}`,
     status: STATUS[impact.system_status] ?? "uncertain",
     change: {
       id: `change-${impact.id}`,
-      authority: updateTitle,
+      authority,
       authorityType: "statute",
       date: impact.resolved_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       summary: impact.explanation,
@@ -141,7 +141,7 @@ export function useLiveDocuments(token: string): LiveState {
     (async () => {
       try {
         const [artefacts, updates] = await Promise.all([api.artefacts(), api.regulatoryUpdates()]);
-        const updateTitle = updates[0]?.title ?? "Regulatory update";
+        const updateTitles = new Map(updates.map((u) => [String(u.id), u.title]));
         const impacts = await api.impacts();
         if (!live) return;
 
@@ -171,13 +171,13 @@ export function useLiveDocuments(token: string): LiveState {
             const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
             const segments = (detail?.segments ?? []) as Segment[];
             const clauses = segments.length
-              ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitle))
+              ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitles))
               : found.map((i) =>
                   toClause(
                     { id: Number(i.segment_id), ordinal: 0, locator: i.locator, text: i.segment_text ?? "", char_start: 0 },
                     String(a.id),
                     i,
-                    updateTitle,
+                    updateTitles,
                   ),
                 );
             return {
@@ -189,8 +189,10 @@ export function useLiveDocuments(token: string): LiveState {
               practiceAreas: [...new Set(found.map((i) => i.concept))].slice(0, 3),
               lastUpdated: new Date().toISOString().slice(0, 10),
               summary: found.length
-                ? `${found.length} finding${found.length === 1 ? "" : "s"} against ${updateTitle}.`
-                : "No findings against the current regulatory update.",
+                ? `${found.length} finding${found.length === 1 ? "" : "s"} against ${
+                    [...new Set(found.map((i) => updateTitles.get(String(i.update_id)) ?? "a regulatory update"))].join("; ")
+                  }.`
+                : "No findings against any current regulatory update.",
               clauses,
             };
           }),

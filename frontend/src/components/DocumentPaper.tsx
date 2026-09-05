@@ -49,14 +49,17 @@ function PaperClause({
   const AuthorityIcon = change ? AUTHORITY_ICON[change.authorityType] : null;
 
   const blastRadius = change ? getBlastRadiusForChange(change, documents, clause.documentId) : [];
-  const categoryBreakdown = getCategoryBreakdown(blastRadius.map((b) => b.document));
+  // One entry per matching clause, so a document with several affected clauses
+  // appears several times. The list names documents, so collapse to unique ones.
+  const affectedDocs = [...new Map(blastRadius.map((b) => [b.document.id, b.document])).values()];
+  const categoryBreakdown = getCategoryBreakdown(affectedDocs);
   const categoryText = Object.entries(categoryBreakdown)
     .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
     .join(" · ");
 
   return (
     <div className={change ? `border-l-2 ${cfg.border} -ml-4 pl-[14px]` : ""}>
-      <p className="text-justify text-[14.5px] leading-[1.85] text-ink">
+      <p className="text-justify text-[16px] leading-[1.9] text-ink">
         <span className="font-semibold">
           {number && `${number}. `}
           {title}.{" "}
@@ -126,19 +129,19 @@ function PaperClause({
             <span className="font-mono text-xs text-ink-faint">{change.date}</span>
           </div>
           <p className="mt-2.5 text-sm font-semibold leading-snug text-ink">{change.summary}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">{change.detail}</p>
           <div className="mt-3.5 rounded-lg bg-surface p-3">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
               <GitBranch size={12} />
-              Blast radius: {blastRadius.length} document{blastRadius.length !== 1 ? "s" : ""} affected
+              Blast radius: {affectedDocs.length} document{affectedDocs.length !== 1 ? "s" : ""} affected
               {categoryText && <span className="font-normal text-ink-soft"> — {categoryText}</span>}
             </p>
-            {blastRadius.length > 0 && (
+            {affectedDocs.length > 0 && (
               <ul className="mt-2 space-y-1">
-                {blastRadius.map((b) => (
-                  <li key={b.document.id} className="text-xs text-ink-soft">
-                    <span className="font-medium text-ink">{b.document.title}</span>{" "}
-                    <span className="text-ink-faint">({b.document.type})</span>
+                {affectedDocs.map((d) => (
+                  <li key={d.id} className="text-[13px] text-ink-soft">
+                    <span className="font-medium text-ink">{d.title}</span>{" "}
+                    <span className="text-ink-faint">({d.type})</span>
                   </li>
                 ))}
               </ul>
@@ -162,7 +165,7 @@ export default function DocumentPaper({ doc, documents, canApprove, onToggleAppr
   });
 
   return (
-    <div className="mx-auto max-w-[880px] rounded-lg border border-line bg-surface px-16 py-12 font-serif shadow-sm">
+    <div className="mx-auto max-w-[880px] rounded-lg border border-line bg-surface px-10 py-10 font-serif shadow-sm sm:px-14">
       <div className="border-b border-line-soft pb-6 text-center">
         <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-ink-faint">{doc.citation}</p>
         <h2 className="mt-3 break-words text-xl font-semibold uppercase tracking-wide text-ink">{mainTitle}</h2>
