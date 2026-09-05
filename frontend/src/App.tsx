@@ -1,12 +1,14 @@
-import { Terminal } from "lucide-react";
+import { Terminal, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
 import ClientDropdown from "./components/ClientDropdown";
 import DocumentCard from "./components/DocumentCard";
 import DocumentViewer from "./components/DocumentViewer";
 import FilterBar from "./components/FilterBar";
+import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
 import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments, setApproval } from "./lib/legalGraph";
+import { ROLE_LABEL, useRole, type Role } from "./lib/role";
 import { useSharedDocuments } from "./lib/sharedDocuments";
 import type { ChangeStatus, SortKey } from "./types";
 
@@ -36,6 +38,9 @@ function Logo() {
 // horizon-scanning/scraping tool, never entered by hand at this screen.
 function LawyerApp() {
   const [documents, setDocuments] = useSharedDocuments();
+  const [role, setRole] = useRole();
+  const canUpload = role === "senior_partner" || role === "dev";
+  const canApprove = role === "senior_partner";
 
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("relevance");
@@ -43,6 +48,7 @@ function LawyerApp() {
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
   const [client, setClient] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
 
   const types = useMemo(() => getAllTypes(documents), [documents]);
   const clients = useMemo(() => getAllClients(documents), [documents]);
@@ -74,12 +80,32 @@ function LawyerApp() {
             <Logo />
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold leading-none text-ink">RegGraph</h1>
-              <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
-                Lawyer
-              </span>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+                className="rounded-md border-none bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
+              >
+                {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Read-only search</p>
+          <div className="flex items-center gap-3">
+            {canUpload && (
+              <button
+                type="button"
+                onClick={() => setShowUpload(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-paper shadow-sm hover:opacity-90"
+              >
+                <UploadCloud size={13} />
+                Upload change
+              </button>
+            )}
+            <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Read-only search</p>
+          </div>
         </div>
       </header>
 
@@ -137,7 +163,12 @@ function LawyerApp() {
 
           <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-140px)]">
             {selected ? (
-              <DocumentViewer doc={selected} documents={documents} onToggleApproval={handleToggleApproval} />
+              <DocumentViewer
+                doc={selected}
+                documents={documents}
+                canApprove={canApprove}
+                onToggleApproval={handleToggleApproval}
+              />
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-line text-sm text-ink-faint">
                 Select a document to view its clauses
@@ -146,6 +177,12 @@ function LawyerApp() {
           </div>
         </div>
       </main>
+
+      {showUpload && canUpload && (
+        <Modal onClose={() => setShowUpload(false)} wide>
+          <UploadChangePanel documents={documents} onIngested={(res) => setDocuments(res.documents)} />
+        </Modal>
+      )}
     </div>
   );
 }

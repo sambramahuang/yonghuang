@@ -8,31 +8,40 @@ import Redline from "./Redline";
 interface Props {
   doc: FirmDocument;
   documents: FirmDocument[];
+  canApprove: boolean;
   onToggleApproval: (clauseId: string, approved: boolean) => void;
 }
 
 const AUTHORITY_ICON = { statute: BookOpen, case: Gavel, guidance: FileText };
 
-// Real-world counterparty framing for the four contract documents in the
-// demo corpus — cosmetic only, not part of the domain model.
+// Real-world counterparty framing for the contract documents in the demo
+// corpus — cosmetic only, not part of the domain model. Documents that
+// aren't contracts simply have no entry here, so the parties preamble and
+// signature block below never render for them.
 const CONTRACT_META: Record<string, { counterparty: string; clientLabel: string; counterpartyLabel: string }> = {
   "doc-msa-straits": { counterparty: "Nimbus AI Pte Ltd", clientLabel: "Client", counterpartyLabel: "Vendor" },
   "doc-dpa-apex": { counterparty: "Nimbus AI Pte Ltd", clientLabel: "Client", counterpartyLabel: "Processor" },
   "doc-employment-northbridge": { counterparty: "[Employee Name]", clientLabel: "Employer", counterpartyLabel: "Employee" },
 };
 
+// Clause headings across the corpus all follow "<Label> <Number> — <Title>"
+// — "Clause 1 —", "Step 4 —", "§2 —", "Module 3 —", "Rule 1 —", etc. — so a
+// single split on the em dash numbers every document type the same way.
 function parseHeading(heading: string): { number: string; title: string } {
-  const match = heading.match(/^Clause\s+(\S+)\s+—\s+(.+)$/);
-  return match ? { number: match[1], title: match[2] } : { number: "", title: heading };
+  const idx = heading.indexOf("—");
+  if (idx === -1) return { number: "", title: heading };
+  return { number: heading.slice(0, idx).trim(), title: heading.slice(idx + 1).trim() };
 }
 
-function ContractClause({
+function PaperClause({
   clause,
   documents,
+  canApprove,
   onToggleApproval,
 }: {
   clause: Clause;
   documents: FirmDocument[];
+  canApprove: boolean;
   onToggleApproval: (clauseId: string, approved: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -78,7 +87,7 @@ function ContractClause({
             {AuthorityIcon && <AuthorityIcon size={11} />}
             Authority: {change.authority}
           </span>
-          {clause.status === "change" && (
+          {clause.status === "change" && canApprove && (
             <button
               type="button"
               onClick={() => onToggleApproval(clause.id, !change.approved)}
@@ -143,10 +152,11 @@ function ContractClause({
   );
 }
 
-export default function ContractView({ doc, documents, onToggleApproval }: Props) {
+export default function DocumentPaper({ doc, documents, canApprove, onToggleApproval }: Props) {
+  const isContract = doc.type === "Contract";
   const meta = CONTRACT_META[doc.id];
-  const isExecuted = doc.citation.toLowerCase().includes("executed");
-  const mainTitle = doc.title.replace(/\s+—\s+.+$/, "");
+  const isExecuted = isContract && doc.citation.toLowerCase().includes("executed");
+  const mainTitle = isContract ? doc.title.replace(/\s+—\s+.+$/, "") : doc.title;
   const dateStr = new Date(doc.lastUpdated).toLocaleDateString("en-SG", {
     day: "numeric",
     month: "long",
@@ -158,7 +168,7 @@ export default function ContractView({ doc, documents, onToggleApproval }: Props
       <div className="border-b border-line-soft pb-6 text-center">
         <p className="font-sans text-[10px] uppercase tracking-[0.2em] text-ink-faint">{doc.citation}</p>
         <h2 className="mt-3 text-xl font-semibold uppercase tracking-wide text-ink">{mainTitle}</h2>
-        {!isExecuted && meta && (
+        {isContract && !isExecuted && meta && (
           <p className="mt-2 font-sans text-xs text-ink-faint">Template — prepared for {doc.client}</p>
         )}
       </div>
@@ -174,37 +184,44 @@ export default function ContractView({ doc, documents, onToggleApproval }: Props
 
       <div className="mt-8 space-y-5">
         {doc.clauses.map((clause) => (
-          <ContractClause key={clause.id} clause={clause} documents={documents} onToggleApproval={onToggleApproval} />
+          <PaperClause
+            key={clause.id}
+            clause={clause}
+            documents={documents}
+            canApprove={canApprove}
+            onToggleApproval={onToggleApproval}
+          />
         ))}
       </div>
 
-      {isExecuted ? (
-        <div className="mt-12 border-t border-line-soft pt-8 font-sans text-[13px] text-ink-soft">
-          <p>IN WITNESS WHEREOF, the Parties have executed this Agreement as of the date first written above.</p>
-          <div className="mt-8 grid grid-cols-2 gap-10">
-            <div>
-              <div className="h-10 border-b border-ink-faint" />
-              <p className="mt-2 text-xs">
-                For and on behalf of
-                <br />
-                <strong className="text-ink">{doc.client}</strong>
-              </p>
-            </div>
-            <div>
-              <div className="h-10 border-b border-ink-faint" />
-              <p className="mt-2 text-xs">
-                For and on behalf of
-                <br />
-                <strong className="text-ink">{meta?.counterparty}</strong>
-              </p>
+      {isContract &&
+        (isExecuted ? (
+          <div className="mt-12 border-t border-line-soft pt-8 font-sans text-[13px] text-ink-soft">
+            <p>IN WITNESS WHEREOF, the Parties have executed this Agreement as of the date first written above.</p>
+            <div className="mt-8 grid grid-cols-2 gap-10">
+              <div>
+                <div className="h-10 border-b border-ink-faint" />
+                <p className="mt-2 text-xs">
+                  For and on behalf of
+                  <br />
+                  <strong className="text-ink">{doc.client}</strong>
+                </p>
+              </div>
+              <div>
+                <div className="h-10 border-b border-ink-faint" />
+                <p className="mt-2 text-xs">
+                  For and on behalf of
+                  <br />
+                  <strong className="text-ink">{meta?.counterparty}</strong>
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <p className="mt-12 border-t border-line-soft pt-6 font-sans text-xs italic text-ink-faint">
-          This template requires party-specific details to be completed before execution.
-        </p>
-      )}
+        ) : (
+          <p className="mt-12 border-t border-line-soft pt-6 font-sans text-xs italic text-ink-faint">
+            This template requires party-specific details to be completed before execution.
+          </p>
+        ))}
     </div>
   );
 }

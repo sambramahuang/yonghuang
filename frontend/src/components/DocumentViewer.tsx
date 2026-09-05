@@ -8,8 +8,7 @@ import {
   summarizeChanges,
 } from "../lib/legalGraph";
 import type { FirmDocument } from "../types";
-import ClauseView from "./ClauseView";
-import ContractView from "./ContractView";
+import DocumentPaper from "./DocumentPaper";
 import ImpactGraphModal from "./ImpactGraphModal";
 import StatusBadge from "./StatusBadge";
 import SummaryModal from "./SummaryModal";
@@ -17,10 +16,11 @@ import SummaryModal from "./SummaryModal";
 interface Props {
   doc: FirmDocument;
   documents: FirmDocument[];
+  canApprove: boolean;
   onToggleApproval: (documentId: string, clauseId: string, approved: boolean) => void;
 }
 
-export default function DocumentViewer({ doc, documents, onToggleApproval }: Props) {
+export default function DocumentViewer({ doc, documents, canApprove, onToggleApproval }: Props) {
   const [showSummary, setShowSummary] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
 
@@ -115,23 +115,13 @@ export default function DocumentViewer({ doc, documents, onToggleApproval }: Pro
         </div>
       </div>
 
-      <div className={`flex-1 overflow-y-auto bg-surface-2 ${doc.type === "Contract" ? "p-8" : "space-y-3.5 p-8"}`}>
-        {doc.type === "Contract" ? (
-          <ContractView
-            doc={doc}
-            documents={documents}
-            onToggleApproval={(clauseId, approved) => onToggleApproval(doc.id, clauseId, approved)}
-          />
-        ) : (
-          doc.clauses.map((clause) => (
-            <ClauseView
-              key={clause.id}
-              clause={clause}
-              documents={documents}
-              onToggleApproval={(clauseId, approved) => onToggleApproval(doc.id, clauseId, approved)}
-            />
-          ))
-        )}
+      <div className="flex-1 overflow-y-auto bg-surface-2 p-8">
+        <DocumentPaper
+          doc={doc}
+          documents={documents}
+          canApprove={canApprove}
+          onToggleApproval={(clauseId, approved) => onToggleApproval(doc.id, clauseId, approved)}
+        />
       </div>
 
       {showSummary && (
