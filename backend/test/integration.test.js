@@ -14,7 +14,7 @@ const dbUrl = process.env.TEST_DATABASE_URL;
 if (!dbUrl) throw new Error('TEST_DATABASE_URL is required. Use a dedicated test database; see README.md.');
 const secret = randomBytes(32).toString('hex');
 const payload = JSON.parse(await readFile(new URL('../../fixtures/regulatory/sg-rra-2026.json',import.meta.url),'utf8'));
-const fixtures = [['employee-handbook.docx','handbook'],['offer-letter-template.docx','template'],['hr-faq.docx','faq'],['hr-system-config.json','config']];
+const fixtures = [['employee-handbook.docx','handbook'],['offer-letter-template.docx','template'],['hr-faq.docx','faq'],['hr-system-config.json','config'],['employment-negotiation-playbook.docx','playbook']];
 const baseRule = text => ({ concept: 'retirement_age',modality: 'IS',operator: '=',value: 63,unit: 'years',assertion_type: 'STATES_LAW',temporal_frame: 'PRESENT',applies_to_condition: null,evidence_quote: text,extraction_confidence: 'HIGH' });
 async function harness(t,extractor = fixtureExtractor()) {
   const schema = `test_${randomBytes(8).toString('hex')}`;
@@ -42,14 +42,17 @@ async function harness(t,extractor = fixtureExtractor()) {
   return { pool,app,api,seed,uploadText,reviewer,approver };
 }
 
-test('demo fixture set yields exactly six expected findings, with exact evidence',async t => {
+test('demo fixture set yields exactly seven expected findings, with exact evidence',async t => {
   const h = await harness(t);
   const { analysis,impacts,update } = await h.seed();
-  assert.equal(analysis.created,6);
+  assert.equal(analysis.created,7);
   assert.deepEqual(impacts.map(i => `${i.system_status}:${i.name}:${i.locator}`).sort(),[
     'UPDATE_NEEDED:employee-handbook.docx:p.3','UPDATE_NEEDED:offer-letter-template.docx:p.3',
     'UPDATE_NEEDED:hr-system-config.json:$.hr.retirementAge','UPDATE_NEEDED:hr-system-config.json:$.hr.reemploymentAge',
     'POSSIBLE_IMPACT:hr-faq.docx:p.3','LEGAL_REVIEW_REQUIRED:hr-faq.docx:p.4',
+    // The playbook's retirement clause flags; its indemnity clause must not,
+    // since no concept covers liability caps.
+    'UPDATE_NEEDED:employment-negotiation-playbook.docx:p.3',
   ].sort());
   assert.equal(analysis.not_actioned.length,1); assert.equal(analysis.not_actioned[0].reason,'HISTORICAL');
   for (const i of impacts) {
@@ -123,7 +126,10 @@ test('policy rejection and legal escalation resolve findings without writing ver
   await h.api('post',`/api/impacts/${policy.id}/reject`).send({ revision: 1,rejection_reason: 'POLICY_EXCEEDS' }).expect(403);
   await h.api('post',`/api/impacts/${policy.id}/reject`,'approver').send({ revision: 1,rejection_reason: 'POLICY_EXCEEDS' }).expect(200);
   await h.api('post',`/api/impacts/${legal.id}/escalate`).send({ revision: 1,note: 'Counsel should assess medical-fitness condition.' }).expect(200);
-  assert.equal((await h.pool.query('SELECT count(*) FROM artefact_versions')).rows[0].count,'4');
+  // One version per ingested artefact and no more: neither rejection nor
+  // escalation may write a new version.
+  const artefacts = (await h.pool.query('SELECT count(*) FROM artefacts')).rows[0].count;
+  assert.equal((await h.pool.query('SELECT count(*) FROM artefact_versions')).rows[0].count,artefacts);
 });
 test('authentication rejects missing, forged, expired and unknown-user tokens',async t => {
   const h = await harness(t);

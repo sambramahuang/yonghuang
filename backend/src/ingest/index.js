@@ -9,7 +9,7 @@ export async function ingest(pool, { buffer, name, type, userId, extractor }) {
   name = path.basename(name ?? '');
   const extension = path.extname(name).toLowerCase();
   ensure(['.json','.docx'].includes(extension), 415, 'Only DOCX and JSON files are supported');
-  ensure(['handbook','template','faq','config','training'].includes(type), 400, 'Unsupported artefact type');
+  ensure(['handbook','template','faq','config','training','playbook'].includes(type), 400, 'Unsupported artefact type');
   ensure(buffer?.length > 0 && buffer.length <= 5 * 1024 * 1024, 413, 'Upload must contain 1 byte to 5 MB');
   const format = extension === '.json' ? 'JSON' : 'DOCX';
   const parsed = format === 'JSON' ? parseJson(buffer) : await parseDocx(buffer);

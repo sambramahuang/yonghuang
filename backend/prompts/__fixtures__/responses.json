@@ -75,5 +75,22 @@
       "evidence_quote": "Re-employment is offered at 63, unless the employee is medically unfit.",
       "extraction_confidence": "HIGH"
     }
-  ]
+  ],
+  "Employment contract negotiation playbook": [],
+  "This playbook tells associates what to concede and what to refuse when negotiating employment terms.": [],
+  "Do not agree to a retirement age below the statutory retirement age of 63.": [
+    {
+      "concept": "retirement_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 63,
+      "unit": "years",
+      "assertion_type": "STATES_LAW",
+      "temporal_frame": "PRESENT",
+      "applies_to_condition": null,
+      "evidence_quote": "Do not agree to a retirement age below the statutory retirement age of 63.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "If the counterparty demands an unlimited indemnity, refuse it and cap liability at SGD 50,000.": []
 }

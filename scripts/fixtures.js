@@ -18,6 +18,11 @@ const artefacts = [
     'Our policy is to offer re-employment until age 70.',
     'Re-employment is offered at 63, unless the employee is medically unfit.',
   ]],
+  ['employment-negotiation-playbook.docx', 'Employment contract negotiation playbook', [
+    'This playbook tells associates what to concede and what to refuse when negotiating employment terms.',
+    'Do not agree to a retirement age below the statutory retirement age of 63.',
+    'If the counterparty demands an unlimited indemnity, refuse it and cap liability at SGD 50,000.',
+  ]],
 ];
 await mkdir(new URL('../fixtures/',import.meta.url),{ recursive: true });
 const recordings = {};
@@ -38,7 +43,8 @@ rule('Employment continues until the statutory retirement age of 63.','retiremen
 rule('Our policy is to offer re-employment until age 70.','reemployment_age',70,{ assertion_type: 'STATES_POLICY' });
 rule('Re-employment is offered at 63, unless the employee is medically unfit.','reemployment_age',63,
   { applies_to_condition: 'unless the employee is medically unfit' });
+rule('Do not agree to a retirement age below the statutory retirement age of 63.','retirement_age',63);
 await mkdir(new URL('../backend/prompts/__fixtures__/',import.meta.url),{ recursive: true });
 await writeFile(new URL('../backend/prompts/__fixtures__/responses.json',import.meta.url),JSON.stringify(recordings,null,2) + '\n');
 await writeFile(new URL('../fixtures/hr-system-config.json',import.meta.url),JSON.stringify({ hr: { retirementAge: 63,reemploymentAge: 68 } },null,2) + '\n');
-console.log('Created four demo artefacts and recorded extraction responses.');
+console.log('Created five demo artefacts and recorded extraction responses.');

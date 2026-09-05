@@ -15,7 +15,7 @@ try {
   const users = (await pool.query('SELECT * FROM users ORDER BY id')).rows;
   const reviewer = users.find(u => u.capability === 'REVIEWER'), approver = users.find(u => u.capability === 'APPROVER');
   const existing = (await pool.query('SELECT name FROM artefacts')).rows;
-  for (const [name,type] of [['employee-handbook.docx','handbook'],['offer-letter-template.docx','template'],['hr-faq.docx','faq'],['hr-system-config.json','config']]) {
+  for (const [name,type] of [['employee-handbook.docx','handbook'],['offer-letter-template.docx','template'],['hr-faq.docx','faq'],['hr-system-config.json','config'],['employment-negotiation-playbook.docx','playbook']]) {
     if (existing.some(a => a.name === name)) continue;
     await ingest(pool,{ buffer: await readFile(new URL(`../fixtures/${name}`,import.meta.url)),name,type,userId: reviewer.id,extractor: fixtureExtractor() });
   }
