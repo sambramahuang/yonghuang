@@ -1,78 +1,145 @@
-import { GitBranch } from "lucide-react";
-import { CHANGE_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
-import type { Clause } from "../types";
+import { BookOpen, Check, ChevronDown, FileText, GitBranch, Gavel, Undo2 } from "lucide-react";
+import { useState } from "react";
+import { getBlastRadiusForChange, getCategoryBreakdown } from "../lib/legalGraph";
+import { AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
+import type { Clause, FirmDocument } from "../types";
+import Redline from "./Redline";
 
 interface Props {
   clause: Clause;
+  documents: FirmDocument[];
+  onToggleApproval: (clauseId: string, approved: boolean) => void;
 }
 
-export default function ClauseView({ clause }: Props) {
+const AUTHORITY_ICON = {
+  statute: BookOpen,
+  case: Gavel,
+  guidance: FileText,
+};
+
+export default function ClauseView({ clause, documents, onToggleApproval }: Props) {
+  const [open, setOpen] = useState(false);
   const cfg = STATUS_CONFIG[clause.status];
-  const Icon = cfg.icon;
-  const changed = clause.changeEvent;
+  const change = clause.change;
+  const AuthorityIcon = change ? AUTHORITY_ICON[change.authorityType] : null;
+
+  const blastRadius = change
+    ? getBlastRadiusForChange(change, documents, clause.documentId)
+    : [];
+  const categoryBreakdown = getCategoryBreakdown(blastRadius.map((b) => b.document));
+  const categoryText = Object.entries(categoryBreakdown)
+    .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
+    .join(" · ");
 
   return (
     <div
-      className={`group relative rounded-xl p-[18px] ${
-        changed ? `border-l-[3px] ${cfg.border} ${cfg.bg}` : `border-l-2 ${cfg.border} bg-surface`
+      className={`relative rounded-xl p-[18px] ${
+        change ? `border-l-[3px] ${cfg.border} ${cfg.bg}` : `border-l-2 ${cfg.border} bg-surface`
       }`}
     >
-      <div className="flex items-start gap-2.5">
-        {changed && (
-          <Icon size={15} className={`mt-0.5 shrink-0 ${cfg.text}`} strokeWidth={2.25} />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-[14.5px] font-semibold text-ink">{clause.heading}</p>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">{clause.text}</p>
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="flex items-start gap-2.5">
+          {change && <cfg.icon size={15} className={`mt-0.5 shrink-0 ${cfg.text}`} strokeWidth={2.25} />}
+          <div className="min-w-0 flex-1">
+            <p className="text-[14.5px] font-semibold text-ink">{clause.heading}</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
+              {clause.status === "change" && change?.redline ? (
+                <Redline segments={change.redline} approved={change.approved} />
+              ) : (
+                clause.text
+              )}
+            </p>
+          </div>
         </div>
+        {clause.status === "change" && change && (
+          <span
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+              change.approved
+                ? "border-good-line bg-good-bg text-good"
+                : "border-bad-line bg-bad-bg text-bad"
+            }`}
+          >
+            {change.approved ? "Approved" : "Pending approval"}
+          </span>
+        )}
       </div>
 
-      {changed && (
+      {change && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pl-6">
+          <span className="inline-flex items-center gap-1.5 text-xs text-ink-soft">
+            {AuthorityIcon && <AuthorityIcon size={12} className="text-ink-faint" />}
+            <span className="font-medium text-ink">Authority:</span> {change.authority}
+          </span>
+
+          {clause.status === "change" && (
+            <button
+              type="button"
+              onClick={() => onToggleApproval(clause.id, !change.approved)}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                change.approved
+                  ? "border-line text-ink-soft hover:bg-surface-2"
+                  : "border-good-line bg-good-bg text-good hover:opacity-80"
+              }`}
+            >
+              {change.approved ? (
+                <>
+                  <Undo2 size={11} /> Unapprove
+                </>
+              ) : (
+                <>
+                  <Check size={11} /> Approve suggestion
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {change && (
         <>
-          <div className="mt-2 flex items-center gap-2 pl-6">
-            <span className={`text-xs font-semibold underline decoration-dotted underline-offset-4 ${cfg.text}`}>
-              {CHANGE_TYPE_LABEL[changed.type]} — hover for details
-            </span>
+          <div className="mt-2 pl-6">
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className={`inline-flex items-center gap-1 text-xs font-semibold ${cfg.text}`}
+            >
+              {clause.status === "uncertain" ? "Outcome pending" : "What changed"}
+              <ChevronDown size={12} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
           </div>
 
-          <div
-            role="tooltip"
-            className="pointer-events-none invisible absolute left-4 right-4 top-full z-20 mt-2 rounded-xl border border-line bg-surface p-5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 sm:left-6 sm:right-auto sm:w-[26rem]"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                <Icon size={12} /> {CHANGE_TYPE_LABEL[changed.type]}
-              </span>
-              <span className="font-mono text-xs text-ink-faint">{changed.date}</span>
-            </div>
+          {open && (
+            <div className="mt-2 rounded-xl border border-line bg-surface p-5 shadow-md sm:ml-6">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                  <cfg.icon size={12} /> {cfg.label} · {AUTHORITY_TYPE_LABEL[change.authorityType]}
+                </span>
+                <span className="font-mono text-xs text-ink-faint">{change.date}</span>
+              </div>
 
-            <p className="mt-2.5 text-sm font-semibold leading-snug text-ink">
-              {changed.summary}
-            </p>
-            <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">
-              {changed.detail}
-            </p>
-            <p className="mt-2.5 text-xs italic text-ink-faint">
-              Source: {changed.source}
-            </p>
+              <p className="mt-2.5 text-sm font-semibold leading-snug text-ink">{change.summary}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
+              <p className="mt-2.5 text-xs italic text-ink-faint">Authority: {change.authority}</p>
 
-            <div className="mt-3.5 rounded-lg bg-surface-2 p-3">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-                <GitBranch size={12} />
-                Blast radius: {changed.blastRadius.length} document
-                {changed.blastRadius.length !== 1 ? "s" : ""} affected
-              </p>
-              <ul className="mt-2 space-y-1">
-                {changed.blastRadius.map((ref) => (
-                  <li key={ref.documentId} className="text-xs text-ink-soft">
-                    <span className="font-medium text-ink">{ref.title}</span>
-                    {" — "}
-                    {ref.relationship}
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-3.5 rounded-lg bg-surface-2 p-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+                  <GitBranch size={12} />
+                  Blast radius: {blastRadius.length} document{blastRadius.length !== 1 ? "s" : ""} affected
+                  {categoryText && <span className="font-normal text-ink-soft"> — {categoryText}</span>}
+                </p>
+                {blastRadius.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {blastRadius.map((b) => (
+                      <li key={b.document.id} className="text-xs text-ink-soft">
+                        <span className="font-medium text-ink">{b.document.title}</span>{" "}
+                        <span className="text-ink-faint">({b.document.type})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

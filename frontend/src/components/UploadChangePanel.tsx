@@ -1,27 +1,20 @@
-import { CheckCircle2, FileUp, GitBranch, Search, UploadCloud } from "lucide-react";
+import { CheckCircle2, FileUp, GitBranch, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
-  detectAffectedDocuments,
+  findDocumentsByAuthority,
+  getAllAuthorities,
+  getCategoryBreakdown,
   ingestChange,
-  type DetectedImpact,
   type IngestResult,
 } from "../lib/legalGraph";
-import { CHANGE_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
-import type { AffectedDocRef, ChangeType, LegalDocument } from "../types";
+import { AUTHORITY_TYPE_LABEL, STATUS_CONFIG } from "../statusConfig";
+import type { AuthorityType, ChangeStatus, FirmDocument } from "../types";
 import StatusBadge from "./StatusBadge";
 
 interface Props {
-  documents: LegalDocument[];
+  documents: FirmDocument[];
   onIngested: (result: IngestResult) => void;
 }
-
-const CHANGE_TYPES: ChangeType[] = [
-  "amendment",
-  "regulatory_guidance",
-  "judicial_reinterpretation",
-  "overturned",
-  "pending_appeal",
-];
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -33,95 +26,49 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const [changeType, setChangeType] = useState<ChangeType>("amendment");
+  const [status, setStatus] = useState<Extract<ChangeStatus, "change" | "uncertain">>("change");
+  const [authority, setAuthority] = useState("");
+  const [authorityType, setAuthorityType] = useState<AuthorityType>("case");
   const [originDocumentId, setOriginDocumentId] = useState("");
   const [originClauseId, setOriginClauseId] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [source, setSource] = useState("");
   const [summary, setSummary] = useState("");
   const [detail, setDetail] = useState("");
+  const [redlineBefore, setRedlineBefore] = useState("");
+  const [redlineAfter, setRedlineAfter] = useState("");
 
-  const [detected, setDetected] = useState<DetectedImpact[] | null>(null);
-  const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
-  const [manualAddId, setManualAddId] = useState("");
   const [result, setResult] = useState<IngestResult | null>(null);
 
   const originDoc = documents.find((d) => d.id === originDocumentId) ?? null;
+  const knownAuthorities = useMemo(() => getAllAuthorities(documents), [documents]);
 
-  const canDetect = originDocumentId !== "" && summary.trim().length > 0;
-  const canIngest =
-    canDetect && originClauseId !== "" && source.trim().length > 0 && detected !== null;
-
-  const remainingDocsForManualAdd = useMemo(
-    () =>
-      documents.filter(
-        (d) => d.id !== originDocumentId && !confirmed.has(d.id),
-      ),
-    [documents, originDocumentId, confirmed],
+  const relatedDocs = useMemo(
+    () => findDocumentsByAuthority(documents, authority, originDocumentId),
+    [documents, authority, originDocumentId],
   );
+  const breakdown = getCategoryBreakdown(relatedDocs);
+  const breakdownText = Object.entries(breakdown)
+    .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
+    .join(" · ");
 
-  function handleFile(f: File | null) {
-    setFile(f);
-  }
-
-  function handleDetect() {
-    const candidates = detectAffectedDocuments(
-      documents,
-      originDocumentId,
-      summary,
-      detail,
-    );
-    setDetected(candidates);
-    setConfirmed(new Set(candidates.map((c) => c.documentId)));
-  }
-
-  function toggleConfirmed(id: string) {
-    setConfirmed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function addManual() {
-    if (!manualAddId) return;
-    const doc = documents.find((d) => d.id === manualAddId);
-    if (!doc) return;
-    setDetected((prev) => [
-      ...(prev ?? []),
-      {
-        documentId: doc.id,
-        title: doc.title,
-        citation: doc.citation,
-        reason: "manually flagged by reviewing lawyer",
-        score: 0,
-      },
-    ]);
-    setConfirmed((prev) => new Set(prev).add(doc.id));
-    setManualAddId("");
-  }
+  const canIngest =
+    originDocumentId !== "" &&
+    originClauseId !== "" &&
+    authority.trim().length > 0 &&
+    summary.trim().length > 0;
 
   function handleIngest() {
-    if (!detected) return;
-    const affected: AffectedDocRef[] = detected
-      .filter((d) => confirmed.has(d.documentId))
-      .map((d) => ({
-        documentId: d.documentId,
-        title: d.title,
-        citation: d.citation,
-        relationship: d.reason || "flagged during ingestion review",
-      }));
-
     const res = ingestChange(documents, {
       originDocumentId,
       originClauseId,
-      type: changeType,
+      status,
+      authority: authority.trim(),
+      authorityType,
       date,
-      source,
       summary,
       detail,
-      affected,
+      redlineBefore,
+      redlineAfter,
     });
     setResult(res);
     onIngested(res);
@@ -129,16 +76,16 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
 
   function reset() {
     setFile(null);
-    setChangeType("amendment");
+    setStatus("change");
+    setAuthority("");
+    setAuthorityType("case");
     setOriginDocumentId("");
     setOriginClauseId("");
     setDate(todayISO());
-    setSource("");
     setSummary("");
     setDetail("");
-    setDetected(null);
-    setConfirmed(new Set());
-    setManualAddId("");
+    setRedlineBefore("");
+    setRedlineAfter("");
     setResult(null);
   }
 
@@ -159,9 +106,8 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
         </div>
         <p className="mt-6 inline-flex items-center gap-1.5 text-sm text-ink-soft">
           <GitBranch size={14} />
-          {result.affectedCount} document{result.affectedCount !== 1 ? "s" : ""} flagged
-          as affected across the graph — their status updates automatically, no manual
-          edits required.
+          {result.affectedCount} document{result.affectedCount !== 1 ? "s" : ""} already cite this
+          authority and are flagged automatically — no manual edits required.
         </p>
         <div className="mt-7 flex justify-center gap-3">
           <button
@@ -181,10 +127,9 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
       <div>
         <h2 className="font-serif text-2xl font-medium text-ink">Upload a change</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          Log an amendment, a court decision, or revised guidance once. The graph
-          finds and flags every document it touches — checklists, templates, playbooks,
-          and advisories included — instead of relying on someone remembering to
-          re-check each one by hand.
+          Log an amendment, a court decision, or revised guidance once, against the tool, system,
+          or practice it directly amends. Every other document already citing the same authority
+          is flagged automatically — no manual cross-referencing required.
         </p>
       </div>
 
@@ -197,17 +142,13 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          handleFile(e.dataTransfer.files?.[0] ?? null);
+          setFile(e.dataTransfer.files?.[0] ?? null);
         }}
         className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-7 text-center transition ${
           dragOver ? "border-accent bg-surface-2" : "border-line bg-surface"
         }`}
       >
-        <input
-          type="file"
-          className="hidden"
-          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-        />
+        <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {file ? (
           <>
             <FileUp size={22} className="text-ink-soft" />
@@ -228,27 +169,48 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
       <div className="space-y-4 rounded-2xl border border-line bg-surface p-7 shadow-sm">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className={LABEL}>Type of change</label>
-            <select
-              value={changeType}
-              onChange={(e) => setChangeType(e.target.value as ChangeType)}
-              className={FIELD}
-            >
-              {CHANGE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {CHANGE_TYPE_LABEL[t]}
-                </option>
-              ))}
+            <label className={LABEL}>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={FIELD}>
+              <option value="change">Change — the required edit is known</option>
+              <option value="uncertain">Uncertain — outcome still pending</option>
             </select>
           </div>
           <div>
             <label className={LABEL}>Effective / decision date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={FIELD} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
+          <div>
+            <label className={LABEL}>Authority — the statute or case law</label>
             <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              type="text"
+              list="known-authorities"
+              value={authority}
+              onChange={(e) => setAuthority(e.target.value)}
+              placeholder="e.g. Court of Appeal in X v Y [2026] SGCA 12, or PDPA s.14 (proposed amendment)"
               className={FIELD}
             />
+            <datalist id="known-authorities">
+              {knownAuthorities.map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className={LABEL}>Authority type</label>
+            <select
+              value={authorityType}
+              onChange={(e) => setAuthorityType(e.target.value as AuthorityType)}
+              className={FIELD}
+            >
+              {(Object.keys(AUTHORITY_TYPE_LABEL) as AuthorityType[]).map((t) => (
+                <option key={t} value={t}>
+                  {AUTHORITY_TYPE_LABEL[t]}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -260,7 +222,6 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
               onChange={(e) => {
                 setOriginDocumentId(e.target.value);
                 setOriginClauseId("");
-                setDetected(null);
               }}
               className={FIELD}
             >
@@ -291,25 +252,11 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
         </div>
 
         <div>
-          <label className={LABEL}>Source citation</label>
-          <input
-            type="text"
-            value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="e.g. Court of Appeal in X v Y [2026] SGCA 12, or PDPC Consultation Paper Aug 2026"
-            className={FIELD}
-          />
-        </div>
-
-        <div>
           <label className={LABEL}>What changed (one line)</label>
           <input
             type="text"
             value={summary}
-            onChange={(e) => {
-              setSummary(e.target.value);
-              setDetected(null);
-            }}
+            onChange={(e) => setSummary(e.target.value)}
             placeholder="e.g. Deemed consent no longer covers AI training data"
             className={FIELD}
           />
@@ -319,90 +266,72 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
           <label className={LABEL}>Detail</label>
           <textarea
             value={detail}
-            onChange={(e) => {
-              setDetail(e.target.value);
-              setDetected(null);
-            }}
-            rows={4}
+            onChange={(e) => setDetail(e.target.value)}
+            rows={3}
             placeholder="Explain the change in enough detail that someone reading it later understands exactly what it requires and why."
             className={FIELD}
           />
         </div>
 
-        <button
-          type="button"
-          onClick={handleDetect}
-          disabled={!canDetect}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-paper hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Search size={14} />
-          Detect affected documents
-        </button>
+        {status === "change" && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className={LABEL}>Text being removed (optional)</label>
+              <textarea
+                value={redlineBefore}
+                onChange={(e) => setRedlineBefore(e.target.value)}
+                rows={3}
+                placeholder="Paste the exact wording to strike out…"
+                className={`${FIELD} font-mono text-xs`}
+              />
+            </div>
+            <div>
+              <label className={LABEL}>Text being inserted (optional)</label>
+              <textarea
+                value={redlineAfter}
+                onChange={(e) => setRedlineAfter(e.target.value)}
+                rows={3}
+                placeholder="Paste the replacement wording…"
+                className={`${FIELD} font-mono text-xs`}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {detected && (
+      {authority.trim().length > 0 && (
         <div className="rounded-2xl border border-line bg-surface p-7 shadow-sm">
           <div className="flex items-center gap-1.5">
             <GitBranch size={16} className="text-ink" />
             <h3 className="text-sm font-semibold text-ink">
-              Documents flagged as affected ({confirmed.size})
+              Documents already citing this authority ({relatedDocs.length})
             </h3>
           </div>
           <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
-            Auto-detected from shared practice areas and overlapping wording. Uncheck
-            anything that doesn't apply, or add one manually below — this is the human
-            check before the change propagates.
+            Computed automatically from exact authority citations — no keyword guessing. These
+            will be flagged as this change's blast radius the moment it's ingested.
+            {breakdownText && <> Breakdown: {breakdownText}.</>}
           </p>
 
-          {detected.length === 0 ? (
+          {relatedDocs.length === 0 ? (
             <p className="mt-3 text-sm text-ink-faint">
-              No candidates detected automatically. You can still add documents manually.
+              No other document currently cites this authority — this will be the first.
             </p>
           ) : (
             <ul className="mt-3.5 space-y-2">
-              {detected.map((d) => (
-                <li
-                  key={d.documentId}
-                  className="flex items-start gap-3 rounded-xl border border-line-soft p-3"
-                >
-                  <input
-                    type="checkbox"
-                    checked={confirmed.has(d.documentId)}
-                    onChange={() => toggleConfirmed(d.documentId)}
-                    className="mt-0.5"
-                  />
+              {relatedDocs.map((d) => (
+                <li key={d.id} className="flex items-start gap-3 rounded-xl border border-line-soft p-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{d.title}</p>
                     <p className="font-mono text-xs text-ink-soft">{d.citation}</p>
-                    <p className="mt-0.5 text-xs italic text-ink-faint">{d.reason}</p>
+                    <p className="mt-0.5 text-xs italic text-ink-faint">
+                      {d.type} · {d.client}
+                    </p>
                   </div>
                 </li>
               ))}
             </ul>
           )}
-
-          <div className="mt-3.5 flex items-center gap-2">
-            <select
-              value={manualAddId}
-              onChange={(e) => setManualAddId(e.target.value)}
-              className={`${FIELD} mt-0 flex-1`}
-            >
-              <option value="">Add another document manually…</option>
-              {remainingDocsForManualAdd.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={addManual}
-              disabled={!manualAddId}
-              className="rounded-xl border border-line px-3.5 py-2.5 text-sm font-medium text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Add
-            </button>
-          </div>
         </div>
       )}
 

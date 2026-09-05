@@ -1,11 +1,10 @@
 import {
-  AlertTriangle,
   CheckCircle2,
-  RefreshCcw,
-  XCircle,
+  FilePenLine,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
-import type { ChangeType, LegalStatus } from "./types";
+import type { AuthorityType, ChangeStatus } from "./types";
 
 interface StatusConfig {
   label: string;
@@ -17,38 +16,29 @@ interface StatusConfig {
   dot: string;
 }
 
-export const STATUS_CONFIG: Record<LegalStatus, StatusConfig> = {
-  good_law: {
-    label: "Good law",
-    short: "Good law",
+export const STATUS_CONFIG: Record<ChangeStatus, StatusConfig> = {
+  no_change: {
+    label: "No change",
+    short: "No change",
     icon: CheckCircle2,
     text: "text-good",
     bg: "bg-good-bg",
     border: "border-good-line",
     dot: "bg-good",
   },
-  overturned: {
-    label: "Overturned / superseded",
-    short: "Overturned",
-    icon: XCircle,
-    text: "text-bad",
-    bg: "bg-bad-bg",
-    border: "border-bad-line",
-    dot: "bg-bad",
-  },
-  in_progress: {
-    label: "Amendment in progress",
-    short: "In progress",
-    icon: RefreshCcw,
+  change: {
+    label: "Change",
+    short: "Change",
+    icon: FilePenLine,
     text: "text-warn",
     bg: "bg-warn-bg",
     border: "border-warn-line",
     dot: "bg-warn",
   },
-  seminal_pending: {
-    label: "Seminal case pending decision",
-    short: "Seminal pending",
-    icon: AlertTriangle,
+  uncertain: {
+    label: "Uncertain",
+    short: "Uncertain",
+    icon: HelpCircle,
     text: "text-seminal",
     bg: "bg-seminal-bg",
     border: "border-seminal-line",
@@ -56,10 +46,8 @@ export const STATUS_CONFIG: Record<LegalStatus, StatusConfig> = {
   },
 };
 
-export const CHANGE_TYPE_LABEL: Record<ChangeType, string> = {
-  amendment: "Legislative amendment",
-  judicial_reinterpretation: "Judicial reinterpretation",
-  regulatory_guidance: "Revised regulatory guidance",
-  overturned: "Overturned on appeal",
-  pending_appeal: "Pending appeal / seminal case",
+export const AUTHORITY_TYPE_LABEL: Record<AuthorityType, string> = {
+  statute: "Statute",
+  case: "Case law",
+  guidance: "Regulatory guidance",
 };

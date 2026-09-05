@@ -2,49 +2,47 @@ import { Download, GitBranch, Sparkles } from "lucide-react";
 import { useState } from "react";
 import {
   buildImpactGraph,
-  getBlastRadius,
+  getBlastRadiusForDocument,
   getChangedClauses,
   getEffectiveStatus,
-  getIncomingImpacts,
   summarizeChanges,
 } from "../lib/legalGraph";
-import { CHANGE_TYPE_LABEL } from "../statusConfig";
-import type { LegalDocument } from "../types";
+import type { FirmDocument } from "../types";
 import ClauseView from "./ClauseView";
 import ImpactGraphModal from "./ImpactGraphModal";
 import StatusBadge from "./StatusBadge";
 import SummaryModal from "./SummaryModal";
 
 interface Props {
-  doc: LegalDocument;
-  documents: LegalDocument[];
+  doc: FirmDocument;
+  documents: FirmDocument[];
+  onToggleApproval: (documentId: string, clauseId: string, approved: boolean) => void;
 }
 
-export default function DocumentViewer({ doc, documents }: Props) {
+export default function DocumentViewer({ doc, documents, onToggleApproval }: Props) {
   const [showSummary, setShowSummary] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
 
-  const status = getEffectiveStatus(doc, documents);
+  const status = getEffectiveStatus(doc);
   const changedCount = getChangedClauses(doc).length;
-  const blastRadius = getBlastRadius(doc);
-  const incomingImpacts = getIncomingImpacts(doc, documents);
+  const blastRadius = getBlastRadiusForDocument(doc, documents);
 
   function handleExport() {
     const summary = summarizeChanges(doc, documents);
     const payload = {
-      document: { id: doc.id, title: doc.title, citation: doc.citation },
+      document: { id: doc.id, title: doc.title, citation: doc.citation, client: doc.client, type: doc.type },
       exportedAt: new Date().toISOString(),
-      overallRisk: summary.overallRisk,
-      blastRadius: blastRadius,
+      overallStatus: summary.overallStatus,
+      blastRadius: blastRadius.map((d) => ({ id: d.id, title: d.title, type: d.type })),
       changes: summary.bullets.map((b) => ({
         clause: b.clauseHeading,
-        ...b.changeEvent,
+        authority: b.change.authority,
+        status: b.change.approved ? "approved" : "unapproved",
+        summary: b.change.summary,
+        detail: b.change.detail,
       })),
-      incomingImpacts: summary.incomingImpacts,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -59,7 +57,7 @@ export default function DocumentViewer({ doc, documents }: Props) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
-              {doc.type}
+              {doc.type} · {doc.client}
             </p>
             <h2 className="mt-1.5 font-serif text-[26px] font-medium leading-tight tracking-tight text-ink">
               {doc.title}
@@ -78,7 +76,7 @@ export default function DocumentViewer({ doc, documents }: Props) {
             className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2.5 text-xs font-semibold text-paper shadow-sm hover:opacity-90"
           >
             <Sparkles size={14} />
-            Summarise changes in law
+            Summarise changes
           </button>
           <button
             type="button"
@@ -107,41 +105,21 @@ export default function DocumentViewer({ doc, documents }: Props) {
       </div>
 
       <div className="flex-1 space-y-3.5 overflow-y-auto p-8">
-        {incomingImpacts.length > 0 && (
-          <div className="rounded-xl border border-warn-line bg-warn-bg p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-warn">
-              Flagged by the graph — affected by {incomingImpacts.length} change
-              {incomingImpacts.length !== 1 ? "s" : ""} ingested elsewhere
-            </p>
-            <ul className="mt-2 space-y-1">
-              {incomingImpacts.map((impact) => (
-                <li key={`${impact.originDocumentId}-${impact.changeEvent.id}`} className="text-xs text-ink-soft">
-                  <span className="font-semibold text-ink">{impact.originDocumentTitle}</span>
-                  {" — "}
-                  {CHANGE_TYPE_LABEL[impact.changeEvent.type]}: {impact.changeEvent.summary}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         {doc.clauses.map((clause) => (
-          <ClauseView key={clause.id} clause={clause} />
+          <ClauseView
+            key={clause.id}
+            clause={clause}
+            documents={documents}
+            onToggleApproval={(clauseId, approved) => onToggleApproval(doc.id, clauseId, approved)}
+          />
         ))}
       </div>
 
       {showSummary && (
-        <SummaryModal
-          doc={doc}
-          summary={summarizeChanges(doc, documents)}
-          onClose={() => setShowSummary(false)}
-        />
+        <SummaryModal doc={doc} summary={summarizeChanges(doc, documents)} onClose={() => setShowSummary(false)} />
       )}
       {showGraph && (
-        <ImpactGraphModal
-          doc={doc}
-          graph={buildImpactGraph(doc, documents)}
-          onClose={() => setShowGraph(false)}
-        />
+        <ImpactGraphModal doc={doc} graph={buildImpactGraph(doc, documents)} onClose={() => setShowGraph(false)} />
       )}
     </div>
   );

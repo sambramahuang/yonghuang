@@ -1,20 +1,15 @@
 import { STATUS_CONFIG } from "../statusConfig";
-import type { LegalStatus } from "../types";
+import type { ChangeStatus } from "../types";
 
 interface Props {
-  statuses: LegalStatus[];
-  onToggleStatus: (status: LegalStatus) => void;
+  statuses: ChangeStatus[];
+  onToggleStatus: (status: ChangeStatus) => void;
   types: string[];
   activeTypes: string[];
   onToggleType: (type: string) => void;
 }
 
-const ALL_STATUSES: LegalStatus[] = [
-  "good_law",
-  "overturned",
-  "in_progress",
-  "seminal_pending",
-];
+const ALL_STATUSES: ChangeStatus[] = ["change", "no_change", "uncertain"];
 
 export default function FilterBar({
   statuses,

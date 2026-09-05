@@ -1,79 +1,59 @@
-// Domain model mirrors the shape the eventual graph backend will expose:
-// documents and clauses are nodes, ChangeEvent.blastRadius are edges to
-// other affected document nodes. The frontend already treats "which
-// documents does this change touch" as a graph query result, so swapping
-// mockApi for a real graph API later is a data-layer change only.
+// Domain model for the firm's own tools, systems, and practices — not the
+// underlying law itself. Each clause that needs a change cites an Authority
+// (a statute or case) as a plain string; blast radius is computed by
+// finding every other document with a clause citing that same authority
+// (see lib/legalGraph.ts), so propagation never needs to be hand-wired
+// between documents — it falls out of the citation graph.
 
-export type LegalStatus =
-  | "good_law"
-  | "overturned"
-  | "in_progress"
-  | "seminal_pending";
+export type ChangeStatus = "no_change" | "change" | "uncertain";
 
-export type ChangeType =
-  | "amendment"
-  | "judicial_reinterpretation"
-  | "regulatory_guidance"
-  | "overturned"
-  | "pending_appeal";
+export type FirmDocType = "Tool" | "System" | "Practice" | "Contract";
 
-export type DocumentType =
-  | "Act"
-  | "Subsidiary Legislation"
-  | "Case"
-  | "Guideline"
-  | "Circular"
-  | "Practice Direction"
-  | "Internal Playbook"
-  | "Template Clause"
-  | "Client Advisory";
+export type AuthorityType = "statute" | "case" | "guidance";
 
-export interface AffectedDocRef {
-  documentId: string;
-  title: string;
-  citation: string;
-  relationship: string; // e.g. "cites this provision", "template clause derived from"
+// One fragment of a clause's Word-track-changes-style redline: plain text
+// carried through unchanged, text being struck out, or text being inserted.
+export interface TextSegment {
+  text: string;
+  kind: "same" | "deleted" | "inserted";
 }
 
-export interface ChangeEvent {
+export interface SuggestedChange {
   id: string;
-  type: ChangeType;
+  authority: string; // e.g. "Goh v Straits Manufacturing Pte Ltd [2026] SGCA 7"
+  authorityType: AuthorityType;
   date: string; // ISO date
-  source: string; // e.g. "Court of Appeal in Lee v Tan [2026] SGCA 4"
   summary: string; // one-line "what changed"
   detail: string; // longer explanation
-  blastRadius: AffectedDocRef[];
+  redline?: TextSegment[]; // present once the exact edit is known (status "change")
+  approved: boolean; // has a reviewing lawyer signed off on this suggested edit
 }
 
 export interface Clause {
   id: string;
   documentId: string;
   heading: string;
-  text: string;
-  status: LegalStatus;
-  changeEvent?: ChangeEvent;
+  text: string; // base text, used whenever there is no redline to render
+  status: ChangeStatus;
+  change?: SuggestedChange;
 }
 
-export interface LegalDocument {
+export interface FirmDocument {
   id: string;
   title: string;
-  citation: string;
-  type: DocumentType;
+  citation: string; // internal reference, e.g. "Internal playbook, v6"
+  type: FirmDocType;
+  client: string; // "Firm-wide" or a named client
   practiceAreas: string[];
-  // No stored `status` field on purpose: overall status is always derived
-  // (see getEffectiveStatus) from this document's own clauses plus any
-  // incoming impacts from changes ingested elsewhere in the graph, so it
-  // can never drift out of sync with an upload the lawyer just made.
   lastUpdated: string; // ISO date
   summary: string;
   clauses: Clause[];
 }
 
-export const STATUS_ORDER: Record<LegalStatus, number> = {
-  overturned: 3,
-  seminal_pending: 2,
-  in_progress: 1,
-  good_law: 0,
+export const STATUS_ORDER: Record<ChangeStatus, number> = {
+  change: 2,
+  uncertain: 1,
+  no_change: 0,
 };
 
 export type SortKey = "relevance" | "lastUpdated" | "blastRadius" | "severity";

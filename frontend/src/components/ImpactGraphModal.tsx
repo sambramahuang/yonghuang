@@ -1,26 +1,24 @@
 import type { ImpactGraph } from "../lib/legalGraph";
 import { STATUS_CONFIG } from "../statusConfig";
-import type { LegalDocument, LegalStatus } from "../types";
+import type { ChangeStatus, FirmDocument } from "../types";
 import Modal from "./Modal";
 
 interface Props {
-  doc: LegalDocument;
+  doc: FirmDocument;
   graph: ImpactGraph;
   onClose: () => void;
 }
 
-const FILL: Record<LegalStatus, string> = {
-  good_law: "fill-good",
-  overturned: "fill-bad",
-  in_progress: "fill-warn",
-  seminal_pending: "fill-seminal",
+const FILL: Record<ChangeStatus, string> = {
+  no_change: "fill-good",
+  change: "fill-warn",
+  uncertain: "fill-seminal",
 };
 
-const STROKE: Record<LegalStatus, string> = {
-  good_law: "stroke-good-line",
-  overturned: "stroke-bad-line",
-  in_progress: "stroke-warn-line",
-  seminal_pending: "stroke-seminal-line",
+const STROKE: Record<ChangeStatus, string> = {
+  no_change: "stroke-good-line",
+  change: "stroke-warn-line",
+  uncertain: "stroke-seminal-line",
 };
 
 const SIZE = 480;
@@ -49,8 +47,7 @@ export default function ImpactGraphModal({ doc, graph, onClose }: Props) {
     >
       {ringNodes.length === 0 ? (
         <p className="text-sm text-ink-soft">
-          This document has no outgoing edges in the change graph — nothing downstream
-          is currently affected.
+          No other document shares an authority with this one — nothing is currently affected.
         </p>
       ) : (
         <>
@@ -100,7 +97,7 @@ export default function ImpactGraphModal({ doc, graph, onClose }: Props) {
           </svg>
 
           <div className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-ink-soft">
-            {(Object.keys(STATUS_CONFIG) as LegalStatus[]).map((s) => (
+            {(Object.keys(STATUS_CONFIG) as ChangeStatus[]).map((s) => (
               <span key={s} className="inline-flex items-center gap-1.5">
                 <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_CONFIG[s].dot}`} />
                 {STATUS_CONFIG[s].short}
@@ -124,9 +121,9 @@ export default function ImpactGraphModal({ doc, graph, onClose }: Props) {
       )}
 
       <p className="mt-4 text-xs leading-relaxed text-ink-faint">
-        This view queries the same document graph the backend maintains — as new
-        amendments are ingested, propagation here updates automatically instead of
-        relying on someone remembering to re-check every downstream document.
+        This view queries the same document graph the backend maintains — as new changes are
+        ingested, propagation here updates automatically instead of relying on someone
+        remembering to re-check every document that cites the same authority.
       </p>
     </Modal>
   );

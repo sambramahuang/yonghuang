@@ -1,13 +1,20 @@
 import { Search as SearchIcon, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
+import ClientDropdown from "./components/ClientDropdown";
 import DocumentCard from "./components/DocumentCard";
 import DocumentViewer from "./components/DocumentViewer";
 import FilterBar from "./components/FilterBar";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
 import { DOCUMENTS } from "./data/mockData";
-import { getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
-import type { LegalDocument, LegalStatus, SortKey } from "./types";
+import {
+  getAllClients,
+  getAllTypes,
+  getEffectiveStatus,
+  searchDocuments,
+  setApproval,
+} from "./lib/legalGraph";
+import type { ChangeStatus, FirmDocument, SortKey } from "./types";
 
 type View = "search" | "upload";
 
@@ -31,25 +38,27 @@ function Logo() {
 }
 
 function App() {
-  const [documents, setDocuments] = useState<LegalDocument[]>(DOCUMENTS);
+  const [documents, setDocuments] = useState<FirmDocument[]>(DOCUMENTS);
   const [view, setView] = useState<View>("search");
 
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("relevance");
-  const [statuses, setStatuses] = useState<LegalStatus[]>([]);
+  const [statuses, setStatuses] = useState<ChangeStatus[]>([]);
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
+  const [client, setClient] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const types = useMemo(() => getAllTypes(documents), [documents]);
+  const clients = useMemo(() => getAllClients(documents), [documents]);
 
   const results = useMemo(
-    () => searchDocuments(documents, query, { statuses, types: activeTypes }, sortKey),
-    [documents, query, statuses, activeTypes, sortKey],
+    () => searchDocuments(documents, query, { statuses, types: activeTypes, client }, sortKey),
+    [documents, query, statuses, activeTypes, client, sortKey],
   );
 
   const selected = results.find((d) => d.id === selectedId) ?? results[0] ?? null;
 
-  function toggleStatus(status: LegalStatus) {
+  function toggleStatus(status: ChangeStatus) {
     setStatuses((prev) =>
       prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
     );
@@ -61,6 +70,10 @@ function App() {
     );
   }
 
+  function handleToggleApproval(documentId: string, clauseId: string, approved: boolean) {
+    setDocuments((prev) => setApproval(prev, documentId, clauseId, approved));
+  }
+
   return (
     <div className="min-h-screen bg-paper">
       <header className="border-b border-line bg-surface">
@@ -70,7 +83,7 @@ function App() {
             <div>
               <h1 className="font-serif italic text-xl font-medium leading-none text-ink">RegGraph</h1>
               <p className="mt-1.5 text-xs text-ink-faint">
-                Search the firm's document graph
+                Search the firm's tools, systems &amp; practices
               </p>
             </div>
           </div>
@@ -80,9 +93,7 @@ function App() {
               type="button"
               onClick={() => setView("search")}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${
-                view === "search"
-                  ? "bg-surface text-ink shadow-sm"
-                  : "text-ink-faint hover:text-ink-soft"
+                view === "search" ? "bg-surface text-ink shadow-sm" : "text-ink-faint hover:text-ink-soft"
               }`}
             >
               <SearchIcon size={14} />
@@ -92,9 +103,7 @@ function App() {
               type="button"
               onClick={() => setView("upload")}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${
-                view === "upload"
-                  ? "bg-surface text-ink shadow-sm"
-                  : "text-ink-faint hover:text-ink-soft"
+                view === "upload" ? "bg-surface text-ink shadow-sm" : "text-ink-faint hover:text-ink-soft"
               }`}
             >
               <UploadCloud size={14} />
@@ -108,19 +117,12 @@ function App() {
         {view === "upload" ? (
           <UploadChangePanel
             documents={documents}
-            onIngested={(res) => {
-              setDocuments(res.documents);
-            }}
+            onIngested={(res) => setDocuments(res.documents)}
           />
         ) : (
           <>
             <div className="rounded-xl border border-line bg-surface p-4 shadow-sm">
-              <SearchBar
-                query={query}
-                onQueryChange={setQuery}
-                sortKey={sortKey}
-                onSortChange={setSortKey}
-              />
+              <SearchBar query={query} onQueryChange={setQuery} sortKey={sortKey} onSortChange={setSortKey} />
               <div className="mt-3 border-t border-line-soft pt-3">
                 <FilterBar
                   statuses={statuses}
@@ -134,14 +136,16 @@ function App() {
 
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr]">
               <div className="space-y-3">
-                <p className="font-mono text-[11px] tracking-wide text-ink-faint">
+                <ClientDropdown clients={clients} value={client} onChange={setClient} />
+                <p className="pt-1 font-mono text-[11px] tracking-wide text-ink-faint">
                   {results.length} DOCUMENT{results.length !== 1 ? "S" : ""}
                 </p>
                 {results.map((doc) => (
                   <DocumentCard
                     key={doc.id}
                     doc={doc}
-                    status={getEffectiveStatus(doc, documents)}
+                    documents={documents}
+                    status={getEffectiveStatus(doc)}
                     active={selected?.id === doc.id}
                     onClick={() => setSelectedId(doc.id)}
                   />
@@ -155,7 +159,7 @@ function App() {
 
               <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-140px)]">
                 {selected ? (
-                  <DocumentViewer doc={selected} documents={documents} />
+                  <DocumentViewer doc={selected} documents={documents} onToggleApproval={handleToggleApproval} />
                 ) : (
                   <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-line text-sm text-ink-faint">
                     Select a document to view its clauses

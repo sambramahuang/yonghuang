@@ -1,8 +1,8 @@
 import { STATUS_CONFIG } from "../statusConfig";
-import type { LegalStatus } from "../types";
+import type { ChangeStatus } from "../types";
 
 interface Props {
-  status: LegalStatus;
+  status: ChangeStatus;
   size?: "sm" | "md";
 }
 
