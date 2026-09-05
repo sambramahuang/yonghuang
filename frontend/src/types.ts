@@ -38,6 +38,11 @@ export type ChangeResolution = "accepted" | "rejected" | "escalated";
 export interface SuggestedChange {
   id: string;
   authority: string; // e.g. "Goh v Straits Manufacturing Pte Ltd [2026] SGCA 7"
+  // Every authority currently flagging this clause, `authority` included. A
+  // clause can be cited by more than one regulatory update at once; blast
+  // radius/graph propagation must match on any of them, not just the one
+  // shown as the primary authority.
+  authorities: string[];
   authorityType: AuthorityType;
   date: string; // ISO date
   summary: string; // one-line "what changed"

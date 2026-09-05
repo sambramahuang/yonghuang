@@ -47,7 +47,7 @@ export function getBlastRadiusForChange(
   for (const doc of documents) {
     if (doc.id === excludeDocumentId) continue;
     for (const clause of getChangedClauses(doc)) {
-      if (clause.change && clause.change.authority === change.authority) {
+      if (clause.change && clause.change.authorities.some((a) => change.authorities.includes(a))) {
         entries.push({ document: doc, clause, change: clause.change });
       }
     }
@@ -200,13 +200,16 @@ export interface ImpactGraph {
 export function buildImpactGraphs(doc: FirmDocument, documents: FirmDocument[]): ImpactGraph[] {
   const authorities = new Map<string, AuthorityType>();
   for (const clause of getChangedClauses(doc)) {
-    if (clause.change) authorities.set(clause.change.authority, clause.change.authorityType);
+    if (!clause.change) continue;
+    for (const authority of clause.change.authorities) {
+      authorities.set(authority, clause.change.authorityType);
+    }
   }
 
   return [...authorities.entries()].map(([authority, authorityType]) => {
     const citing = new Map<string, FirmDocument>();
     for (const d of documents) {
-      if (d.clauses.some((c) => c.change?.authority === authority)) citing.set(d.id, d);
+      if (getChangedClauses(d).some((c) => c.change?.authorities.includes(authority))) citing.set(d.id, d);
     }
     return {
       authority,

@@ -108,7 +108,7 @@ interface Segment {
   char_start: number;
 }
 
-function toClause(impact: ImpactSummary, updateTitles: Map<string, string>): Clause {
+function toClause(impact: ImpactSummary, updateTitles: Map<string, string>, authorities: string[]): Clause {
   // segment_text is the clause; patch offsets are absolute, so the clause's
   // own start is needed to place the redline within it. The list endpoint does
   // not carry char_start, so a VALUE patch is located by its old value instead.
@@ -134,6 +134,7 @@ function toClause(impact: ImpactSummary, updateTitles: Map<string, string>): Cla
     change: {
       id: `change-${impact.id}`,
       authority: updateTitles.get(String(impact.update_id)) ?? "a regulatory update",
+      authorities,
       authorityType: "statute",
       date: impact.resolved_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       summary: impact.explanation,
@@ -228,11 +229,32 @@ export function useLiveDocuments(token: string): LiveState {
                   : "No findings against the current regulatory update.",
               clauses: (() => {
                 const segments = details.get(String(a.id))?.segments ?? [];
-                if (!segments.length) return found.map((i) => toClause(i, updateTitles));
-                const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
+                // More than one regulatory update can flag the same segment at
+                // once (e.g. two amendments both touching a notice-period
+                // clause). Group by segment first so every authority is kept —
+                // collapsing straight to a Map by segment_id would silently
+                // drop all but the last finding on that segment, along with
+                // its authority, from blast radius/graph propagation.
+                const bySegment = new Map<string, ImpactSummary[]>();
+                for (const i of found) {
+                  const key = String(i.segment_id);
+                  if (!bySegment.has(key)) bySegment.set(key, []);
+                  bySegment.get(key)!.push(i);
+                }
+                const authoritiesFor = (group: ImpactSummary[]) => [
+                  ...new Set(group.map((i) => updateTitles.get(String(i.update_id)) ?? "a regulatory update")),
+                ];
+
+                if (!segments.length) {
+                  return [...bySegment.values()].map((group) =>
+                    toClause(group[group.length - 1], updateTitles, authoritiesFor(group)),
+                  );
+                }
                 return segments.map((seg) => {
-                  const impact = bySegment.get(String(seg.id));
-                  return impact ? toClause(impact, updateTitles) : plainClause(seg, String(a.id));
+                  const group = bySegment.get(String(seg.id));
+                  return group
+                    ? toClause(group[group.length - 1], updateTitles, authoritiesFor(group))
+                    : plainClause(seg, String(a.id));
                 });
               })(),
             };

@@ -30,6 +30,8 @@ interface LawResult {
   changes_found: number;
   unmapped: { change_type: string; source_span: string }[];
   findings_created?: number;
+  not_actioned?: { segment_id: number; artefact_id: number; name: string; locator: string; text: string; reason: string }[];
+  gaps?: { change_id: number; concept: string; explanation: string }[];
   deferred_until?: string | null;
   message?: string;
 }
@@ -163,6 +165,40 @@ export default function UploadChangePanel({ onIngested }: Props) {
               {lawResult.unmapped.map((u, i) => (
                 <li key={i} className="text-xs italic text-ink-faint">
                   &ldquo;{u.source_span}&rdquo;
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!!lawResult.gaps?.length && (
+          <div className="mx-auto mt-4 max-w-sm rounded-lg border border-seminal-line bg-seminal-bg p-3 text-left">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-seminal">
+              <AlertTriangle size={13} />
+              {lawResult.gaps.length} gap{lawResult.gaps.length !== 1 ? "s" : ""} identified — no existing document
+              addresses {lawResult.gaps.length !== 1 ? "these duties" : "this duty"}:
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {lawResult.gaps.map((g) => (
+                <li key={g.change_id} className="text-xs text-ink-soft">
+                  <span className="font-semibold text-ink">{g.concept}</span> — {g.explanation}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {!!lawResult.not_actioned?.length && (
+          <div className="mx-auto mt-4 max-w-sm rounded-lg border border-line-soft bg-surface-2 p-3 text-left">
+            <p className="text-xs font-semibold text-ink-soft">
+              {lawResult.not_actioned.length} statement{lawResult.not_actioned.length !== 1 ? "s" : ""} matched but{" "}
+              {lawResult.not_actioned.length !== 1 ? "weren't" : "wasn't"} actioned:
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {lawResult.not_actioned.map((n) => (
+                <li key={n.segment_id} className="text-xs text-ink-faint">
+                  <span className="font-semibold text-ink-soft">{n.name}</span> ({n.reason.toLowerCase()}) —{" "}
+                  <span className="italic">&ldquo;{n.text}&rdquo;</span>
                 </li>
               ))}
             </ul>
