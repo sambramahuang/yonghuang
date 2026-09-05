@@ -1,6 +1,6 @@
-node_modules/
+.DS_Store
 .env
 .local/
-coverage/
-.DS_Store
 backend/config/demo-accounts.md
+coverage/
+node_modules/
