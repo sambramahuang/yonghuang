@@ -1,5 +1,5 @@
 import { ChevronDown, Terminal, UploadCloud } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ClientDropdown from "./components/ClientDropdown";
 import DocumentCard from "./components/DocumentCard";
 import DocumentViewer from "./components/DocumentViewer";
@@ -7,9 +7,13 @@ import FilterBar from "./components/FilterBar";
 import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
-import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments, setApproval } from "./lib/legalGraph";
+import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
 import { ROLE_LABEL, useRole, type Role } from "./lib/role";
 import { useSharedDocuments } from "./lib/sharedDocuments";
+import { useLiveDocuments } from "./lib/liveDocuments";
+import { api, ApiError, getToken, setToken } from "./api/client";
+import LoginScreen from "./components/LoginScreen";
+import type { User } from "./api/types";
 import type { ChangeStatus, SortKey } from "./types";
 
 function Logo() {
@@ -37,10 +41,21 @@ function Logo() {
 // in the real system, changes are routed in automatically by the firm's
 // horizon-scanning/scraping tool, never entered by hand at this screen.
 function LawyerApp() {
-  const [documents, setDocuments] = useSharedDocuments();
+  const [token, setTokenState] = useState(getToken());
+  const [user, setUser] = useState<User | null>(null);
+  const { documents, error: loadError, reload, impactIdFor } = useLiveDocuments(token);
   const [role, setRole] = useRole();
+  // Approval is granted by the backend capability, not the local role picker:
+  // the role selector previews what each seniority sees, but only an APPROVER
+  // token can actually write a new version, and the server enforces that.
   const canUpload = role === "senior_partner" || role === "dev";
-  const canApprove = role === "senior_partner";
+  const canApprove = user?.capability === "APPROVER";
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    api.me().then(setUser).catch(() => setUser(null));
+  }, [token]);
 
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("relevance");
@@ -68,9 +83,38 @@ function LawyerApp() {
     setActiveTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
   }
 
-  function handleToggleApproval(documentId: string, clauseId: string, approved: boolean) {
-    setDocuments((prev) => setApproval(prev, documentId, clauseId, approved));
+  // Approving a redline runs the real workflow: submit it, then approve it.
+  // The backend refuses if the same user does both, so separation of duties
+  // still holds exactly as it does over the API.
+  async function handleToggleApproval(_documentId: string, clauseId: string, approved: boolean) {
+    const id = impactIdFor(clauseId);
+    if (!id || !approved) return;
+    setActionError(null);
+    try {
+      const detail = await api.impact(id);
+      const submitted = detail.workflow_state === "SUBMITTED"
+        ? detail
+        : await api.submit(id, detail.revision);
+      await api.approve(id, submitted.revision);
+      reload();
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : "Could not approve this change");
+      reload();
+    }
   }
+
+  if (!token) {
+    return (
+      <LoginScreen
+        onSignedIn={(signedIn) => {
+          setUser(signedIn);
+          setTokenState(getToken());
+        }}
+      />
+    );
+  }
+
+  const banner = actionError ?? loadError;
 
   return (
     <div className="min-h-screen bg-paper">
@@ -96,6 +140,13 @@ function LawyerApp() {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
+                className="ml-2 rounded-lg border border-line px-2.5 py-1.5 text-sm text-ink-faint hover:text-ink"
+              >
+                Sign out{user ? ` (${user.capability})` : ""}
+              </button>
               <ChevronDown
                 size={14}
                 strokeWidth={2.25}
@@ -117,6 +168,11 @@ function LawyerApp() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
+        {banner && (
+          <p role="alert" className="mb-4 rounded-lg border border-bad-line bg-bad-bg p-3 text-sm text-bad">
+            {banner}
+          </p>
+        )}
         <section className="mb-6">
           <p className="text-xs font-bold uppercase tracking-wider text-brand">Search</p>
           <h2 className="mt-3 max-w-3xl font-serif text-[44px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[60px]">
@@ -182,7 +238,7 @@ function LawyerApp() {
 
       {showUpload && canUpload && (
         <Modal onClose={() => setShowUpload(false)} wide>
-          <UploadChangePanel documents={documents} onIngested={(res) => setDocuments(res.documents)} />
+          <UploadChangePanel documents={documents} onIngested={() => reload()} />
         </Modal>
       )}
     </div>
