@@ -8,7 +8,6 @@ import {
   FileText,
   Gavel,
   GraduationCap,
-  HelpCircle,
   ListChecks,
   Megaphone,
   Workflow,
@@ -44,15 +43,6 @@ export const STATUS_CONFIG: Record<ChangeStatus, StatusConfig> = {
     bg: "bg-warn-bg",
     border: "border-warn-line",
     dot: "bg-warn",
-  },
-  uncertain: {
-    label: "Uncertain",
-    short: "Uncertain",
-    icon: HelpCircle,
-    text: "text-seminal",
-    bg: "bg-seminal-bg",
-    border: "border-seminal-line",
-    dot: "bg-seminal",
   },
 };
 

@@ -5,7 +5,10 @@
 // (see lib/legalGraph.ts), so propagation never needs to be hand-wired
 // between documents — it falls out of the citation graph.
 
-export type ChangeStatus = "no_change" | "change" | "uncertain";
+// Two states, deliberately. A finding either needs a human to act on it or it
+// does not; whether the proposed edit is a verified value swap or model-drafted
+// wording is a property of the patch, shown in the clause, not a third status.
+export type ChangeStatus = "no_change" | "change";
 
 export type FirmDocType =
   | "Contract"
@@ -45,6 +48,13 @@ export interface SuggestedChange {
   // An exact edit exists to apply. Uncertainties usually carry none: there is
   // a flag to decide, but no text the machine is willing to rewrite.
   hasPatch?: boolean;
+  /**
+   * Whether a deterministic rule stands behind the proposed edit. A verified
+   * edit replaces a value the regulator supplied, matched literally against the
+   * document; an unverified one is model-drafted wording. Both need approval,
+   * but a reviewer must never mistake the second for the first.
+   */
+  verified?: boolean;
   // The edit is still a draft. Separation of duties is enforced end to end —
   // the approver may not be the person who submitted it — so a draft must be
   // submitted by a reviewer before an approver can accept it.
@@ -73,8 +83,7 @@ export interface FirmDocument {
 }
 
 export const STATUS_ORDER: Record<ChangeStatus, number> = {
-  change: 2,
-  uncertain: 1,
+  change: 1,
   no_change: 0,
 };
 

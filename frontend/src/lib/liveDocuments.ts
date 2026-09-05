@@ -21,13 +21,15 @@ import type {
  * visible rather than absent.
  */
 
-// The backend's four machine verdicts collapse to the three the UI shows.
-// LEGAL_REVIEW_REQUIRED and POSSIBLE_IMPACT both mean "a human must look",
-// which is exactly what "uncertain" conveys.
+// The backend's four machine verdicts collapse to the two the UI shows. Anything
+// that is not already correct needs a human to act on it, so it reads as
+// "change" whether the system can verify the edit or only draft it. The clause
+// itself shows which, so a reviewer never mistakes drafted wording for a
+// checked value swap.
 const STATUS: Record<SystemStatus, ChangeStatus> = {
   UPDATE_NEEDED: "change",
-  LEGAL_REVIEW_REQUIRED: "uncertain",
-  POSSIBLE_IMPACT: "uncertain",
+  LEGAL_REVIEW_REQUIRED: "change",
+  POSSIBLE_IMPACT: "change",
   CURRENT: "no_change",
 };
 
@@ -128,7 +130,7 @@ function toClause(impact: ImpactSummary, updateTitles: Map<string, string>): Cla
     documentId: `artefact-${impact.artefact_id}`,
     heading: impact.locator ?? "",
     text: settledText,
-    status: resolution ? "no_change" : STATUS[impact.system_status] ?? "uncertain",
+    status: resolution ? "no_change" : STATUS[impact.system_status] ?? "change",
     change: {
       id: `change-${impact.id}`,
       authority: updateTitles.get(String(impact.update_id)) ?? "Regulatory update",
@@ -140,6 +142,7 @@ function toClause(impact: ImpactSummary, updateTitles: Map<string, string>): Cla
       approved: impact.resolution === "ACCEPTED",
       resolution,
       hasPatch: !!patch,
+      verified: patch?.verified === true,
       awaitingSubmission: !!patch && impact.workflow_state === "DRAFT",
     },
   };

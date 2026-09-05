@@ -92,7 +92,7 @@ function LawyerApp() {
   // Accepting a proposed edit submits it and then approves it, which writes a
   // new version of the artefact — the backend refuses if the same user does
   // both, so separation of duties holds exactly as it does over the API.
-  // Accepting an uncertainty carries no edit to apply, so it resolves through
+  // Accepting a flag with no edit to apply resolves through
   // /accept instead: the flag is recorded as read and the text stands.
   // Submitting is the reviewer's half of that split, offered on drafts.
   async function handleResolve(
