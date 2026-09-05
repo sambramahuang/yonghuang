@@ -8,7 +8,7 @@ import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
 import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
-import { ROLE_LABEL, useRole, type Role } from "./lib/role";
+import { ROLE_LABEL, type Role } from "./lib/role";
 import { useSharedDocuments } from "./lib/sharedDocuments";
 import { useLiveDocuments } from "./lib/liveDocuments";
 import { api, ApiError, getToken, setToken } from "./api/client";
@@ -44,11 +44,12 @@ function LawyerApp() {
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState<User | null>(null);
   const { documents, error: loadError, reload, impactIdFor } = useLiveDocuments(token);
-  const [role, setRole] = useRole();
-  // Approval is granted by the backend capability, not the local role picker:
-  // the role selector previews what each seniority sees, but only an APPROVER
-  // token can actually write a new version, and the server enforces that.
-  const canUpload = role === "senior_partner" || role === "dev";
+  // Permissions follow the signed-in user's backend capability. A local role
+  // picker alongside real authentication was actively misleading: it hid the
+  // upload affordance from an APPROVER because the picker still said
+  // "Associate", while approval itself ignored the picker entirely.
+  const role: Role = user?.capability === "APPROVER" ? "senior_partner" : "associate";
+  const canUpload = user?.capability === "APPROVER" || user?.capability === "REVIEWER";
   const canApprove = user?.capability === "APPROVER";
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -128,18 +129,10 @@ function LawyerApp() {
             <p className="hidden text-xs font-semibold uppercase tracking-wider text-ink-faint sm:block">
               Read-only search
             </p>
-            <div className="relative">
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-                className="appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-9 text-xs font-medium text-ink hover:border-line-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
-              >
-                {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABEL[r]}
-                  </option>
-                ))}
-              </select>
+            <div className="relative flex items-center">
+              <span className="rounded-full border border-line bg-surface py-2 px-4 text-xs font-medium text-ink">
+                {user ? `${user.name} · ${ROLE_LABEL[role]}` : "…"}
+              </span>
               <button
                 type="button"
                 onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
