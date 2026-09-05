@@ -1,0 +1,27 @@
+{
+  "_comment": "POST this to /api/regulatory-updates to simulate the horizon-scanning provider. Every source_span below is quoted verbatim from the Cybersecurity (Amendment) Act 2024 (Act 19 of 2024), which introduces Part 3A and sections 16A-16K governing designated providers responsible for third-party-owned critical information infrastructure. The old_value in each change is the position the firm's pre-amendment precedents were drafted against, not a figure stated by the Act.",
+
+  "provider_ref": "SG-CSA-AMD-2024",
+  "title": "Cybersecurity (Amendment) Act 2024 — designated provider reporting obligations",
+  "source_url": "https://www.egazette.gov.sg/",
+  "gazetted_date": "2024-05-07",
+  "effective_date": "2025-01-01",
+  "changes": [
+    {
+      "concept": "audit_report_submission_days",
+      "change_type": "VALUE_CHANGED",
+      "old_value": 30,
+      "new_value": 14,
+      "unit": "days",
+      "source_span": "The designated provider responsible for third-party-owned critical information infrastructure must, not later than 14 days after receiving from the owner a report of an audit or a cybersecurity risk assessment, furnish a copy of the report of the audit or assessment to the Commissioner."
+    },
+    {
+      "concept": "material_change_notification_days",
+      "change_type": "VALUE_CHANGED",
+      "old_value": 30,
+      "new_value": 14,
+      "unit": "days",
+      "source_span": "the designated provider responsible for third-party-owned critical information infrastructure must notify the Commissioner of the change not later than 14 days after the change is made."
+    }
+  ]
+}
