@@ -9,7 +9,7 @@ import { analyse } from './impact/match.js';
 import { editPatch, submit, approve, resolve } from './workflow/review.js';
 import { artefactDetail, impactDetail, listImpacts } from './queries.js';
 
-export function createApp({ pool, secret, extractor, drafter = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
+export function createApp({ pool, secret, extractor, drafter = null, discoverer = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
   const app = express();
   app.disable('x-powered-by');
   // Accepts a comma-separated list so Vite's port fallback (5173 -> 5174) does
@@ -48,7 +48,7 @@ export function createApp({ pool, secret, extractor, drafter = null, extractionM
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 2 } });
   app.post('/api/artefacts',reviewer,upload.single('file'),async (req,res) => {
     ensure(req.file,400,'Attach a DOCX or JSON file in multipart field file');
-    res.status(201).json(await ingest(pool,{ buffer: req.file.buffer,name: req.file.originalname,type: req.body.type,userId: req.user.id,extractor }));
+    res.status(201).json(await ingest(pool,{ buffer: req.file.buffer,name: req.file.originalname,type: req.body.type,userId: req.user.id,extractor,discoverer }));
   });
   app.get('/api/artefacts/:id',async (req,res) => res.json(await artefactDetail(pool,req.params.id)));
   app.get('/api/artefacts/:id/download',async (req,res) => {

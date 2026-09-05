@@ -1,7 +1,9 @@
-import { concepts, configFields, qualifierPattern } from '../config.js';
-import { validateRules } from './schema.js';
+import { configFields, qualifierPattern } from '../config.js';
+import { validateRulesFor } from './schema.js';
 
-export async function extractRules(segment, { name, format, extractor }) {
+export async function extractRules(segment, { name, format, extractor, concepts }) {
+  const conceptList = [...concepts.values()];
+  const validateRules = validateRulesFor(conceptList.map(c => c.id));
   let rules;
   try {
     if (format === 'JSON') {
@@ -11,7 +13,7 @@ export async function extractRules(segment, { name, format, extractor }) {
       rules = [{ concept: mapping.concept, modality: 'IS', operator: '=', value: segment.scalar_value,
         unit: concepts.get(mapping.concept).unit, assertion_type: mapping.assertion_type,
         temporal_frame: 'PRESENT', applies_to_condition: null, evidence_quote: segment.text, extraction_confidence: 'HIGH' }];
-    } else { rules = await extractor(segment); }
+    } else { rules = await extractor(segment, conceptList); }
     // Unknown concepts abstain. Everything else must satisfy the exact schema.
     if (Array.isArray(rules)) rules = rules.map(r => r && typeof r.concept === 'string' && !concepts.has(r.concept) ? { ...r, concept: null } : r);
     if (!validateRules(rules)) return { rules: [], confidence: 'LOW', error: 'Invalid extraction schema' };

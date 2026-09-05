@@ -3,10 +3,12 @@ import { parseDocx } from './parsers/docx.js';
 import { parseJson } from './parsers/json.js';
 import { parsePdf } from './parsers/pdf.js';
 import { extractRules } from '../extract/rules.js';
+import { discoverConcepts } from '../extract/discover.js';
+import { loadConcepts } from '../vocabulary.js';
 import { transaction } from '../db.js';
 import { ensure } from '../errors.js';
 
-export async function ingest(pool, { buffer, name, type, userId, extractor }) {
+export async function ingest(pool, { buffer, name, type, userId, extractor, discoverer = null }) {
   name = path.basename(name ?? '');
   const extension = path.extname(name).toLowerCase();
   ensure(['.json','.docx','.pdf'].includes(extension), 415, 'Only DOCX, PDF and JSON files are supported');
@@ -14,9 +16,13 @@ export async function ingest(pool, { buffer, name, type, userId, extractor }) {
   ensure(buffer?.length > 0 && buffer.length <= 5 * 1024 * 1024, 413, 'Upload must contain 1 byte to 5 MB');
   const format = extension === '.json' ? 'JSON' : extension === '.pdf' ? 'PDF' : 'DOCX';
   const parsed = format === 'JSON' ? parseJson(buffer) : format === 'PDF' ? await parsePdf(buffer) : await parseDocx(buffer);
+  // Discovery runs first so a document from an unseen practice area can define
+  // the concepts it needs before its own segments are extracted.
+  const discovered = format === 'JSON' ? [] : await discoverConcepts(pool, { text: parsed.raw_text, discoverer });
+  const concepts = await loadConcepts(pool, { force: discovered.length > 0 });
   // Provider calls happen before opening a transaction. Extraction has no database handle.
   const results = [];
-  for (const segment of parsed.segments) results.push(await extractRules(segment, { name, format, extractor }));
+  for (const segment of parsed.segments) results.push(await extractRules(segment, { name, format, extractor, concepts }));
   return transaction(pool, async db => {
     const artefact = (await db.query('INSERT INTO artefacts(name,type,format) VALUES($1,$2,$3) RETURNING *', [name,type,format])).rows[0];
     const version = (await db.query("INSERT INTO artefact_versions(artefact_id,version,raw_text,status,created_by) VALUES($1,1,$2,'CURRENT',$3) RETURNING *", [artefact.id,parsed.raw_text,userId])).rows[0];

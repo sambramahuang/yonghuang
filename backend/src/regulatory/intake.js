@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
-import { concepts } from '../config.js';
+import { loadConcepts } from '../vocabulary.js';
 import { ensure } from '../errors.js';
 import { transaction } from '../db.js';
 
 const isDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
   Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 
-export function validateUpdate(body) {
+export function validateUpdate(body, concepts) {
   ensure(body && typeof body === 'object', 400, 'An update object is required');
   ensure(typeof body.provider_ref === 'string' && body.provider_ref.length > 0 && body.provider_ref.length <= 200, 400, 'provider_ref is required (max 200 characters)');
   ensure(typeof body.title === 'string' && body.title.length > 0 && body.title.length <= 1000, 400, 'title is required (max 1000 characters)');
@@ -36,7 +36,8 @@ export function validateUpdate(body) {
 }
 
 export async function intake(pool, body) {
-  const update = validateUpdate(body);
+  // Validate against the live vocabulary, which grows as concepts are discovered.
+  const update = validateUpdate(body, await loadConcepts(pool));
   const hash = createHash('sha256').update(JSON.stringify(update)).digest('hex');
   return transaction(pool, async db => {
     const inserted = await db.query(`INSERT INTO regulatory_updates(provider_ref,payload_hash,title,source_url,gazetted_date,effective_date)

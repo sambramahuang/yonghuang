@@ -6,6 +6,7 @@ import { extractRules } from '../src/extract/rules.js';
 import { requiresLegalReview } from '../src/impact/boundary.js';
 import { numericTokens, rebasePatch } from '../src/impact/patch.js';
 import { validateUpdate } from '../src/regulatory/intake.js';
+import { vocabulary } from '../src/config.js';
 import { liveExtractor } from '../src/extract/providers.js';
 import { readFileSync } from 'node:fs';
 
@@ -13,7 +14,9 @@ const update = JSON.parse(readFileSync(new URL('../../fixtures/regulatory/sg-rra
 const text = 'The statutory retirement age is 63.';
 const rule = { concept: 'retirement_age',modality: 'IS',operator: '=',value: 63,unit: 'years',assertion_type: 'STATES_LAW',
   temporal_frame: 'PRESENT',applies_to_condition: null,evidence_quote: text,extraction_confidence: 'HIGH' };
-const extract = (rules,raw = text) => extractRules(segmentText(raw)[0],{ name: 'test.docx',format: 'DOCX',extractor: async () => rules });
+// The seeded vocabulary stands in for the live one in unit tests.
+const seededVocabulary = new Map(vocabulary.concepts.map(c => [c.id, c]));
+const extract = (rules,raw = text) => extractRules(segmentText(raw)[0],{ name: 'test.docx',format: 'DOCX',extractor: async () => rules,concepts: seededVocabulary });
 
 test('JSON canonicalization retains nested and escaped paths with exact UTF-16 offsets',() => {
   const value = { 'a.b': { 'quote"key': ['😀',63] },hr: { retirementAge: 63 } };
@@ -70,7 +73,7 @@ test('patch offsets rebase across length changes and reject overlapping edits',(
 test('intake validates dates, units, concept uniqueness and source protocols',() => {
   for (const fields of [{ effective_date: '2026-02-30' },{ source_url: 'javascript:alert(1)' },
     { changes: [update.changes[0],update.changes[0]] },{ changes: [{ ...update.changes[0],unit: 'months' }] }]) {
-    assert.throws(() => validateUpdate({ ...update,...fields }));
+    assert.throws(() => validateUpdate({ ...update,...fields },seededVocabulary));
   }
 });
 test('Responses adapter sends strict structured output, handles completion and refuses partial output',async () => {
@@ -103,4 +106,25 @@ test('password hashing is salted, verifies correctly and rejects malformed recor
     assert.equal(await verifyPassword('anything',bad),false);
   }
   await assert.rejects(() => hashPassword('short'));
+});
+
+test('concept discovery normalises candidates and refuses near-duplicates', async () => {
+  const { duplicates, discoveryPrompt } = await import('../src/extract/discover.js');
+  const existing = [{ id: 'retirement_age',label: 'Statutory minimum retirement age',unit: 'years',
+    direction: 'FLOOR',aliases: ['retirement age','minimum retirement age'] }];
+
+  // The same parameter under a different name must not enter the vocabulary,
+  // otherwise one regulatory change would match only some documents.
+  assert.equal(duplicates({ id: 'retirement_age',label: 'x',aliases: ['x'] },existing),true);
+  assert.equal(duplicates({ id: 'minimum_retirement_age',label: 'Minimum retirement age',aliases: ['retirement age'] },existing),true);
+  assert.equal(duplicates({ id: 'statutory_retirement',label: 'Retirement age',aliases: ['retirement'] },existing),true);
+
+  // A genuinely different parameter is allowed through.
+  assert.equal(duplicates({ id: 'audit_report_submission_days',label: 'Audit report submission deadline',
+    unit: 'days',direction: 'CEILING',aliases: ['submit audit report','within 30 days'] },existing),false);
+
+  // The prompt carries the existing vocabulary so the model can reuse it.
+  const prompt = discoveryPrompt('some document text',existing);
+  assert.match(prompt,/retirement_age/);
+  assert.match(prompt,/REUSE an existing concept/);
 });
