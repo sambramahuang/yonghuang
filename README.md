@@ -1,6 +1,13 @@
 # Yonghuang regulatory impact backend
 
-Node + Express + PostgreSQL implementation of [MVP_ARCHITECTURE.md](MVP_ARCHITECTURE.md). It ingests DOCX/JSON, extracts claims, analyses regulatory changes, proposes numeric patches, and requires a separate approver to create a new version with an audit trail.
+Node + Express + PostgreSQL implementation of [MVP_ARCHITECTURE.md](MVP_ARCHITECTURE.md). It ingests DOCX/PDF/JSON firm artefacts (handbooks, templates, FAQs, config, training material, playbooks), extracts claims, analyses regulatory changes, proposes numeric patches, and requires a separate approver to create a new version with an audit trail.
+
+A regulatory update can be logged two ways: `POST /api/regulatory-updates` takes the structured
+JSON payload the schema requires, or `POST /api/regulatory-updates/upload` takes a DOCX/PDF of the
+actual judgment, amendment, or circular — the model reads it, proposes the same structured shape,
+and that proposal is re-validated by the same checks a hand-written submission goes through before
+anything is stored. Either path analyses immediately, flagging every artefact in the system that
+the change actually affects.
 
 The frontend is being built separately. See [the API guide](docs/API.md), [OpenAPI contract](docs/openapi.json), and [JavaScript client](client/api.js).
 
@@ -69,7 +76,7 @@ Implemented: ingestion, validated extraction, structured/lexical matching, evide
 
 MVP limits:
 
-- DOCX imports are normalized text. Original formatting and Word tracked-change export are not preserved; downloads are `.txt`. JSON downloads remain valid JSON.
+- DOCX and PDF imports are normalized to plain text. Original formatting and Word tracked-change export are not preserved; downloads are `.txt`. JSON downloads remain valid JSON.
 - Approved versions are not re-extracted. Existing findings preserve original evidence. Later changes against edited artefacts require legal review.
 - Future-effective updates can be stored, but analysis is deferred until the effective date.
 - Explanations are deterministic descriptions of the actual verdict. The LLM extracts claims only.
