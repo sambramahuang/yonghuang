@@ -1,0 +1,67 @@
+{
+  "_comment": [
+    "Closed concept vocabulary. Seeded by hand; the LLM classifies INTO this list and never",
+    "invents a concept. Anything it cannot place is returned as null (UNMAPPED), which is a",
+    "valid and expected output.",
+    "",
+    "`aliases` doubles as the keyword list for LEXICAL matching. A lexical hit requires an",
+    "alias AND the literal old value in the same segment - that co-occurrence rule is what",
+    "stops 'clause 63' matching a retirement-age change. Do not relax it.",
+    "",
+    "`direction` tells the impact engine whether a value is a legal minimum (FLOOR) or a cap",
+    "(CEILING). It is how we decide whether an internal value that differs from the new legal",
+    "value is non-compliant or merely more generous."
+  ],
+
+  "concepts": [
+    {
+      "id": "retirement_age",
+      "label": "Statutory minimum retirement age",
+      "value_type": "number",
+      "unit": "years",
+      "direction": "FLOOR",
+      "aliases": ["retirement age", "minimum retirement age", "statutory retirement", "retire", "retirementAge"]
+    },
+    {
+      "id": "reemployment_age",
+      "label": "Statutory re-employment age",
+      "value_type": "number",
+      "unit": "years",
+      "direction": "FLOOR",
+      "aliases": ["re-employment age", "reemployment age", "re-employ", "reemploymentAge"]
+    },
+    {
+      "id": "cpf_ow_ceiling",
+      "label": "CPF Ordinary Wage ceiling",
+      "value_type": "money",
+      "unit": "SGD/month",
+      "direction": "CEILING",
+      "aliases": ["CPF ceiling", "Ordinary Wage ceiling", "OW ceiling", "CPF monthly salary ceiling", "owCeiling"]
+    },
+    {
+      "id": "shared_parental_leave_weeks",
+      "label": "Shared Parental Leave entitlement",
+      "value_type": "duration",
+      "unit": "weeks",
+      "direction": "FLOOR",
+      "aliases": ["shared parental leave", "SPL", "sharedParentalLeaveWeeks"]
+    },
+    {
+      "id": "paternity_leave_weeks",
+      "label": "Government-Paid Paternity Leave entitlement",
+      "value_type": "duration",
+      "unit": "weeks",
+      "direction": "FLOOR",
+      "aliases": ["paternity leave", "GPPL", "paternityLeaveWeeks"]
+    }
+  ],
+
+  "qualifier_patterns": [
+    "unless",
+    "except",
+    "provided that",
+    "subject to",
+    "save that",
+    "other than"
+  ]
+}

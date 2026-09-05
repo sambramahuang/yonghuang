@@ -1,0 +1,32 @@
+{
+  "name": "yonghuang-regulatory-impact",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env backend/src/server.js",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "fixtures": "node scripts/fixtures.js",
+    "openapi": "node scripts/openapi.js",
+    "test": "node --env-file-if-exists=.env --test backend/test/*.test.js",
+    "test:unit": "node --test backend/test/unit.test.js",
+    "demo": "node --env-file-if-exists=.env scripts/demo.js",
+    "smoke": "node --env-file-if-exists=.env scripts/smoke.js",
+    "token": "node --env-file-if-exists=.env scripts/token.js"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "express": "^5.2.1",
+    "mammoth": "^1.11.0",
+    "multer": "^2.0.2",
+    "pdfjs-dist": "^5.6.205",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "docx": "^9.5.1",
+    "supertest": "^7.1.4"
+  }
+}

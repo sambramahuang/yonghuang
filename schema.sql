@@ -1,0 +1,4 @@
+-- Use npm run db:migrate for transactional, non-destructive schema setup.
+-- Runtime migration: backend/db/schema.sql.
+-- Original design sketch: docs/reference/initial-schema.sql.
+-- This entry point deliberately executes no SQL to prevent accidental data loss.

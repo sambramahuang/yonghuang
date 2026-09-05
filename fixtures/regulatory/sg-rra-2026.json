@@ -1,0 +1,27 @@
+{
+  "_comment": "POST this to /api/regulatory-updates to simulate the horizon-scanning provider. Facts verified against Rajah & Tann and Allen & Gledhill client alerts on the 2026 Notifications; announced at MOM Committee of Supply, 3 March 2026.",
+
+  "provider_ref": "SG-RRA-2026-04-01",
+  "title": "Retirement and Re-employment (Prescribed Minimum Retirement Age / Prescribed Re-employment Age) Notifications 2026",
+  "source_url": "https://www.egazette.gov.sg/",
+  "gazetted_date": "2026-04-01",
+  "effective_date": "2026-07-01",
+  "changes": [
+    {
+      "concept": "retirement_age",
+      "change_type": "VALUE_CHANGED",
+      "old_value": 63,
+      "new_value": 64,
+      "unit": "years",
+      "source_span": "the prescribed minimum retirement age for employees who attain 63 years of age on or after 1 July 2026 is 64 years of age"
+    },
+    {
+      "concept": "reemployment_age",
+      "change_type": "VALUE_CHANGED",
+      "old_value": 68,
+      "new_value": 69,
+      "unit": "years",
+      "source_span": "the prescribed re-employment age for employees who attain 68 years of age on or after 1 July 2026 is 69 years of age"
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "Employee handbook": [],
+  "This handbook summarises the retirement arrangements used by the firm.": [],
+  "The statutory retirement age is 63.": [
+    {
+      "concept": "retirement_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 63,
+      "unit": "years",
+      "assertion_type": "STATES_LAW",
+      "temporal_frame": "PRESENT",
+      "applies_to_condition": null,
+      "evidence_quote": "The statutory retirement age is 63.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "Before 1 July 2026, the statutory retirement age was 63.": [
+    {
+      "concept": "retirement_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 63,
+      "unit": "years",
+      "assertion_type": "STATES_LAW",
+      "temporal_frame": "HISTORICAL",
+      "applies_to_condition": null,
+      "evidence_quote": "Before 1 July 2026, the statutory retirement age was 63.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "Offer letter template": [],
+  "We are pleased to offer you employment on the following terms.": [],
+  "Employment continues until the statutory retirement age of 63.": [
+    {
+      "concept": "retirement_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 63,
+      "unit": "years",
+      "assertion_type": "STATES_LAW",
+      "temporal_frame": "PRESENT",
+      "applies_to_condition": null,
+      "evidence_quote": "Employment continues until the statutory retirement age of 63.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "Refer to clause 63 of the Staff Manual.": [],
+  "Human resources questions": [],
+  "These answers describe the arrangements offered to employees approaching retirement.": [],
+  "Our policy is to offer re-employment until age 70.": [
+    {
+      "concept": "reemployment_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 70,
+      "unit": "years",
+      "assertion_type": "STATES_POLICY",
+      "temporal_frame": "PRESENT",
+      "applies_to_condition": null,
+      "evidence_quote": "Our policy is to offer re-employment until age 70.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "Re-employment is offered at 63, unless the employee is medically unfit.": [
+    {
+      "concept": "reemployment_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 63,
+      "unit": "years",
+      "assertion_type": "STATES_LAW",
+      "temporal_frame": "PRESENT",
+      "applies_to_condition": "unless the employee is medically unfit",
+      "evidence_quote": "Re-employment is offered at 63, unless the employee is medically unfit.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "Employment contract negotiation playbook": [],
+  "This playbook tells associates what to concede and what to refuse when negotiating employment terms.": [],
+  "Do not agree to a retirement age below the statutory retirement age of 63.": [
+    {
+      "concept": "retirement_age",
+      "modality": "IS",
+      "operator": "=",
+      "value": 63,
+      "unit": "years",
+      "assertion_type": "STATES_LAW",
+      "temporal_frame": "PRESENT",
+      "applies_to_condition": null,
+      "evidence_quote": "Do not agree to a retirement age below the statutory retirement age of 63.",
+      "extraction_confidence": "HIGH"
+    }
+  ],
+  "If the counterparty demands an unlimited indemnity, refuse it and cap liability at SGD 50,000.": []
+}
