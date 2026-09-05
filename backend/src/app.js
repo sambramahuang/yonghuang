@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { authenticate, requireCapability } from './auth/rbac.js';
+import { loginHandler } from './auth/login.js';
 import { ensure, HttpError } from './errors.js';
 import { ingest } from './ingest/index.js';
 import { intake } from './regulatory/intake.js';
@@ -28,6 +29,8 @@ export function createApp({ pool, secret, extractor, extractionMode = 'fixture',
     await pool.query('SELECT 1');
     res.json({ status: 'ok', extraction_mode: extractionMode });
   });
+  // Sign-in is the only route reachable without a token.
+  app.post('/api/login',loginHandler(pool,secret));
   app.use('/api',authenticate(pool,secret));
   app.param('id',(req,res,next,id) => {
     if (!/^[1-9]\d{0,17}$/.test(id)) return next(new HttpError(400,'Invalid resource id'));

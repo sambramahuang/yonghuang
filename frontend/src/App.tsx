@@ -5,6 +5,7 @@ import { STATUS_ORDER, SYSTEM_STATUS } from "./api/statusConfig";
 import type { ImpactSummary, RegulatoryUpdate, SystemStatus, User } from "./api/types";
 import ImpactCard from "./components/ImpactCard";
 import ImpactDetailView from "./components/ImpactDetailView";
+import LoginScreen from "./components/LoginScreen";
 
 function Logo() {
   return (
@@ -111,34 +112,20 @@ function App() {
     }
   }
 
-  function applyToken(value: string) {
-    setToken(value.trim());
-    setTokenState(value.trim());
+  function signOut() {
+    setToken("");
+    setTokenState("");
+    setUser(null);
   }
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-paper px-6">
-        <div className="w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <Logo />
-            <h1 className="font-serif text-xl italic text-ink">RegGraph</h1>
-          </div>
-          <p className="mb-3 text-sm text-ink-soft">
-            This demo has no login route by design. Mint a token on the backend and paste it here:
-          </p>
-          <pre className="mb-3 overflow-x-auto rounded-lg bg-surface-2 p-3 font-mono text-xs text-ink-soft">
-            npm run token -- reviewer{"\n"}npm run token -- approver
-          </pre>
-          <input
-            autoFocus
-            placeholder="Paste bearer token"
-            onKeyDown={(e) => e.key === "Enter" && applyToken(e.currentTarget.value)}
-            onBlur={(e) => applyToken(e.currentTarget.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-line"
-          />
-        </div>
-      </div>
+      <LoginScreen
+        onSignedIn={(signedIn) => {
+          setUser(signedIn);
+          setTokenState(getToken());
+        }}
+      />
     );
   }
 
@@ -182,10 +169,10 @@ function App() {
             </span>
             <button
               type="button"
-              onClick={() => applyToken("")}
+              onClick={signOut}
               className="rounded-lg border border-line px-2.5 py-1.5 text-sm text-ink-faint hover:text-ink"
             >
-              Switch
+              Sign out
             </button>
           </div>
         </div>

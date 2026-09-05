@@ -38,12 +38,23 @@ This development machine already has `.env` configured for the isolated database
 
 ## Seeded accounts
 
-```sh
-npm run token -- reviewer
-npm run token -- approver
-```
+Sign in at the dashboard with the seeded demo credentials:
 
-Rachel Tan is the reviewer; Daniel Lim is the approver. These commands generate eight-hour signed bearer tokens. Send `Authorization: Bearer <token>` on every API request except health. Capabilities come from the database. Token generation is an operator-only local utility, not an HTTP login endpoint. This is the agreed local demo authentication setup.
+| username | password | capability |
+|---|---|---|
+| `rachel` | `reviewer123` | REVIEWER — Rachel Tan, edits and submits patches |
+| `daniel` | `approver123` | APPROVER — Daniel Lim, approves, writing a new version |
+
+`POST /api/login` takes `{username, password}` and returns a signed eight-hour bearer token plus the
+user record. Passwords are stored as salted scrypt hashes (Node's standard library, no new
+dependency); a wrong password and an unknown username return the same 401 message, and sign-in
+attempts are throttled per IP. Capabilities come from the database, never from the token.
+
+These are well-known local development credentials, not secrets, and are seeded by migration 2.
+Every route except `/api/health` and `/api/login` requires `Authorization: Bearer <token>`.
+
+`npm run token -- reviewer|approver` still mints a token directly, as an operator convenience for
+scripting and for the smoke test.
 
 ## Extraction
 

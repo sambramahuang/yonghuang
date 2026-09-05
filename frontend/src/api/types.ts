@@ -150,3 +150,8 @@ export interface ArtefactVersion {
   created_by: string | null;
   approved_by: string | null;
 }
+
+export interface LoginResponse {
+  token: string;
+  user: User;
+}

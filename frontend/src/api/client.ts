@@ -3,6 +3,7 @@ import type {
   ArtefactVersion,
   ImpactDetail,
   ImpactSummary,
+  LoginResponse,
   RegulatoryUpdate,
   RejectionReason,
   SystemStatus,
@@ -77,6 +78,8 @@ const post = <T>(path: string, body?: unknown) =>
 
 export const api = {
   health: () => request<{ status: string; extraction_mode: string }>("/health"),
+  login: (username: string, password: string) =>
+    post<LoginResponse>("/login", { username, password }),
   me: () => request<User>("/me"),
   users: () => request<User[]>("/users"),
 

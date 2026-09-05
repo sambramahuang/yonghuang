@@ -176,3 +176,39 @@ test('unknown config filenames have no inferred statutory rules; uploads validat
   await h.api('post','/api/artefacts').field('type','handbook').attach('file',Buffer.from('not a zip'),'broken.docx').expect(400);
   await h.api('post','/api/artefacts').field('type','handbook').attach('file',Buffer.from('pdf'),'file.pdf').expect(415);
 });
+
+test('password sign-in issues a working token, hides which credential was wrong, and preserves RBAC', async t => {
+  const { app, seed } = await harness(t);
+  const login = (username,password) => request(app).post('/api/login').send({ username,password });
+
+  // Seeded demo accounts sign in and receive their real capability.
+  const rachel = await login('rachel','reviewer123').expect(200);
+  assert.equal(rachel.body.user.capability,'REVIEWER');
+  assert.ok(rachel.body.token);
+  const daniel = await login('daniel','approver123').expect(200);
+  assert.equal(daniel.body.user.capability,'APPROVER');
+
+  // Usernames are matched case-insensitively.
+  await login('RACHEL','reviewer123').expect(200);
+
+  // A wrong password and an unknown user are indistinguishable to the caller.
+  const wrongPassword = await login('rachel','nope').expect(401);
+  const unknownUser = await login('ghost','nope').expect(401);
+  assert.equal(wrongPassword.body.error,unknownUser.body.error);
+
+  await login('rachel','').expect(401);
+  await request(app).post('/api/login').send({}).expect(400);
+
+  // The issued token authenticates real requests and still carries only its
+  // own capability: signing in as a reviewer never grants approval rights.
+  const me = await request(app).get('/api/me').auth(rachel.body.token,{ type: 'bearer' }).expect(200);
+  assert.equal(me.body.capability,'REVIEWER');
+  const { impacts } = await seed();
+  const open = impacts.find(i => i.system_status === 'UPDATE_NEEDED');
+  await request(app).post(`/api/impacts/${open.id}/approve`).auth(rachel.body.token,{ type: 'bearer' })
+    .send({ revision: open.revision }).expect(403);
+
+  // Password hashes are never returned by any user-facing route.
+  const users = await request(app).get('/api/users').auth(rachel.body.token,{ type: 'bearer' }).expect(200);
+  for (const row of users.body) assert.equal(row.password_hash,undefined);
+});

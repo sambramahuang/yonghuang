@@ -86,3 +86,21 @@ test('Responses adapter sends strict structured output, handles completion and r
     await assert.rejects(refusing({ text,locator: 'p.1' }));
   }
 });
+
+test('password hashing is salted, verifies correctly and rejects malformed records', async () => {
+  const { hashPassword, verifyPassword } = await import('../src/auth/password.js');
+  const hash = await hashPassword('correct horse battery');
+  assert.match(hash,/^scrypt\$\d+\$\d+\$\d+\$[\w-]+\$[\w-]+$/);
+  assert.ok(await verifyPassword('correct horse battery',hash));
+  assert.equal(await verifyPassword('wrong',hash),false);
+
+  // Equal passwords must not produce equal records: the salt differs each time.
+  assert.notEqual(hash,await hashPassword('correct horse battery'));
+
+  // Absent or corrupt stored values fail closed rather than throwing, so a user
+  // row without a password behaves exactly like a wrong password.
+  for (const bad of ['','not-a-hash','scrypt$1$2$3','bcrypt$x$y',null,undefined]) {
+    assert.equal(await verifyPassword('anything',bad),false);
+  }
+  await assert.rejects(() => hashPassword('short'));
+});
