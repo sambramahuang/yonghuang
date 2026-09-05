@@ -64,9 +64,17 @@ If we run out of time, a working slice on **one** concept beats a broken system 
 
 ## 5. Supported concepts (closed vocabulary)
 
-The concept vocabulary is **seeded by hand before any extraction runs** and lives in
-`backend/config/concepts.json`. The LLM classifies into this enum; it never invents a concept.
+The concept vocabulary lives in the `concepts` table, seeded from `backend/config/concepts.json`.
+The LLM classifies into this enum during extraction; it never invents a concept mid-extraction.
 Anything it cannot place becomes `UNMAPPED`, which is a valid, expected output.
+
+The table below is the employment-law seed. A document from an unseen practice area would once
+have produced nothing until someone hand-edited the config, which is not a task a lawyer can
+perform. Concepts are therefore **discovered** from a document's own text before it is extracted
+(`backend/src/extract/discover.js`): the model proposes quantitative parameters, each candidate is
+normalised and de-duplicated against the existing vocabulary, and survivors are written to the
+table. Extraction remains a closed-enum classification against whatever the vocabulary holds at
+that moment.
 
 | id | value type | unit | direction |
 |---|---|---|---|
@@ -88,7 +96,8 @@ Extracted per segment. Every field earns its place:
 {
   "concept": "retirement_age",       // FK to concepts.json, or null == UNMAPPED
   "modality": "IS",                  // IS | MUST | MUST_NOT | MAY
-  "operator": "=",                   // = | >= | <= | > | <   (null when modality != IS)
+  "operator": "=",                   // = | >= | <= | > | <   (required for IS, null for MAY,
+                                     //   optional for MUST / MUST_NOT)
   "value": 63,
   "unit": "years",
   "assertion_type": "STATES_LAW",    // STATES_LAW | STATES_POLICY | STATES_BOTH
@@ -154,7 +163,9 @@ function requiresLegalReview(rule, change) {
     rule.assertion_type === 'STATES_BOTH' ||         // law and policy entangled in one sentence
     rule.temporal_frame !== 'PRESENT' ||             // historical or future statements
     rule.extraction_confidence === 'LOW' ||
-    rule.applies_to_condition != null                // a stated condition we did not parse
+    rule.applies_to_condition != null ||             // a stated condition we did not parse
+    !['IS','MUST','MUST_NOT'].includes(rule.modality) ||  // MAY grants, it does not set
+    !['=','<=','>='].includes(rule.operator)         // a threshold we can compare
   );
 }
 ```

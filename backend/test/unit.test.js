@@ -57,11 +57,17 @@ test('qualifier scan is deterministic regardless of model confidence',async () =
 test('every declared competence boundary refuses machine patches',() => {
   const base = { ...rule,has_qualifier: false };
   for (const fields of [{ has_qualifier: true },{ assertion_type: 'STATES_BOTH' },{ temporal_frame: 'HISTORICAL' },{ temporal_frame: 'FUTURE' },
-    { extraction_confidence: 'LOW' },{ applies_to_condition: 'if eligible' },{ modality: 'MUST',operator: null },{ operator: '>=' },{ unit: 'months' }]) {
+    { extraction_confidence: 'LOW' },{ applies_to_condition: 'if eligible' },{ modality: 'MUST',operator: null },
+    { modality: 'MAY',operator: null },{ operator: '<' },{ operator: '>' },{ value: null },{ unit: 'months' }]) {
     assert.equal(requiresLegalReview({ ...base,...fields },update.changes[0]),true);
   }
   assert.equal(requiresLegalReview(base,{ ...update.changes[0],change_type: 'DUTY_ADDED' }),true);
   assert.equal(requiresLegalReview(base,update.changes[0]),false);
+  // A duty carrying a threshold is as patchable as a statement of fact:
+  // "must submit within 30 days" names a value the regulator can change.
+  for (const fields of [{ modality: 'MUST',operator: '<=' },{ modality: 'MUST_NOT',operator: '>=' }]) {
+    assert.equal(requiresLegalReview({ ...base,...fields },update.changes[0]),false);
+  }
 });
 test('patch offsets rebase across length changes and reject overlapping edits',() => {
   const patch = { start: 5,end: 7,old: '68',new: '69' };

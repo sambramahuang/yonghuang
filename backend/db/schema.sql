@@ -52,7 +52,10 @@ CREATE TABLE internal_rules (
   evidence_start INT NOT NULL, evidence_end INT NOT NULL,
   extraction_confidence TEXT NOT NULL CHECK (extraction_confidence IN ('HIGH','LOW')),
   CHECK (evidence_start >= 0 AND evidence_end > evidence_start),
-  CHECK ((modality = 'IS' AND operator IS NOT NULL) OR (modality <> 'IS' AND operator IS NULL))
+  -- A statement of fact must carry a comparator ("is 63"). A duty may carry
+  -- one ("within 30 days") but need not. MAY asserts no threshold at all.
+  CHECK ((modality = 'IS' AND operator IS NOT NULL) OR (modality = 'MAY' AND operator IS NULL)
+    OR modality IN ('MUST','MUST_NOT'))
 );
 CREATE INDEX idx_rules_concept ON internal_rules(concept);
 CREATE TABLE regulatory_updates (

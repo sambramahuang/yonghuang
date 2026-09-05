@@ -69,6 +69,20 @@ const MIGRATIONS = [
       )`);
     },
   },
+  {
+    version: 5,
+    // Duties carry comparators too: "must submit within 30 days" is
+    // modality MUST with operator <=. Only MAY asserts no threshold.
+    async up(db) {
+      const name = (await db.query(`SELECT conname FROM pg_constraint
+        WHERE conrelid='internal_rules'::regclass AND contype='c'
+          AND pg_get_constraintdef(oid) LIKE '%modality%operator%'`)).rows[0]?.conname;
+      if (name) await db.query(`ALTER TABLE internal_rules DROP CONSTRAINT "${name}"`);
+      await db.query(`ALTER TABLE internal_rules ADD CONSTRAINT internal_rules_modality_operator CHECK (
+        (modality = 'IS' AND operator IS NOT NULL) OR (modality = 'MAY' AND operator IS NULL)
+        OR modality IN ('MUST','MUST_NOT'))`);
+    },
+  },
 ];
 
 export async function migrate(pool) {

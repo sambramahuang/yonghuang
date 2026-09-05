@@ -22,7 +22,9 @@ export async function extractRules(segment, { name, format, extractor, concepts 
       const quote = rule.evidence_quote;
       const relative = segment.text.indexOf(quote);
       if (!quote || relative < 0 || segment.text.indexOf(quote, relative + 1) !== -1 ||
-          (rule.modality === 'IS') !== (rule.operator !== null) ||
+          // IS must carry a comparator, MAY must not; a duty may either way.
+          (rule.modality === 'IS' && rule.operator === null) ||
+          (rule.modality === 'MAY' && rule.operator !== null) ||
           (rule.applies_to_condition !== null && (!rule.applies_to_condition || !segment.text.includes(rule.applies_to_condition)))) {
         continue;
       }
