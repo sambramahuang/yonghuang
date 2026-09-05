@@ -152,24 +152,14 @@ export function useLiveDocuments(token: string): LiveState {
           byArtefact.get(key)!.push(impact);
         }
 
-        // Fetch each artefact in full so the reader sees the whole document,
-        // not only the paragraphs that happen to carry a finding.
-        const details = await Promise.all(
-          artefacts.map(async (a) => {
-            try {
-              return { a, detail: await api.artefact(String(a.id)) };
-            } catch {
-              return { a, detail: null };
-            }
-          }),
-        );
-        if (!live) return;
-
-        setDocuments(
-          details.map(({ a, detail }) => {
+        // Render the list from the summary data first. Fetching every
+        // artefact's full text before the first paint left the sign-in button
+        // spinning for seconds on a corpus of this size.
+        const shell = (detailFor: Map<string, { segments?: Segment[] }>) =>
+          artefacts.map((a) => {
             const found = byArtefact.get(String(a.id)) ?? [];
             const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
-            const segments = (detail?.segments ?? []) as Segment[];
+            const segments = detailFor.get(String(a.id))?.segments ?? [];
             const clauses = segments.length
               ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitles))
               : found.map((i) =>
@@ -195,8 +185,25 @@ export function useLiveDocuments(token: string): LiveState {
                 : "No findings against any current regulatory update.",
               clauses,
             };
+          });
+
+        const details = new Map<string, { segments?: Segment[] }>();
+        setDocuments(shell(details));
+        setLoading(false);
+
+        // Then fill in full text per artefact, refreshing as each arrives.
+        await Promise.all(
+          artefacts.map(async (a) => {
+            try {
+              const detail = await api.artefact(String(a.id));
+              details.set(String(a.id), detail as { segments?: Segment[] });
+              if (live) setDocuments(shell(details));
+            } catch {
+              /* a document that will not load simply keeps its finding-only view */
+            }
           }),
         );
+        if (!live) return;
         setError(null);
       } catch (e) {
         if (live) setError(e instanceof ApiError ? e.message : "Failed to load documents");
