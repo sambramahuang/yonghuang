@@ -69,3 +69,28 @@ MVP limits:
 - The regulatory fixture is a simulated provider payload. Its age changes and effective date agree with [MOM retirement guidance](https://www.mom.gov.sg/employment-practices/retirement) and [re-employment guidance](https://www.mom.gov.sg/employment-practices/re-employment). Its purported gazette date and instrument quotations remain unverified. Intake stores provider evidence without authenticating it.
 
 The original fixture requirements remain in [fixtures/README.md](fixtures/README.md). Runtime config/prompt files are under `backend/`; root copies are reference inputs. Use `npm run db:migrate`, which is transactional and never drops application tables.
+
+## Frontend
+
+The dashboard is a React + TypeScript + Vite app in `frontend/`, wired to the live API.
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
+
+It expects the backend on `http://127.0.0.1:3001/api` (override with `VITE_API_BASE`) and must
+be served from `http://localhost:5173`, the origin the backend's CORS allows. If Vite reports
+that port is in use it will pick another one, and requests will then be blocked by CORS — free
+5173 rather than accepting the fallback.
+
+There is no login route by design. Mint a token with `npm run token -- reviewer` (or `approver`)
+and paste it into the prompt on first load; it is kept in `localStorage`. "Switch" clears it, which
+is how you move between the reviewer and approver roles to demonstrate separation of duties.
+
+The queue lists findings for the selected regulatory update, filterable by system status. Selecting
+one shows both evidence spans with the matched text highlighted in place, the regulator's own
+wording, and — where no patch was proposed — the specific competence-boundary reasons why.
+Reviewers edit and submit the redline; a different user with APPROVER capability approves it, which
+writes a new artefact version. The audit trail is shown beneath.
