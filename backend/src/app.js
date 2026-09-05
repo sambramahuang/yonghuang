@@ -6,7 +6,7 @@ import { ensure, HttpError } from './errors.js';
 import { ingest } from './ingest/index.js';
 import { intake } from './regulatory/intake.js';
 import { analyse } from './impact/match.js';
-import { editPatch, submit, approve, resolve } from './workflow/review.js';
+import { editPatch, submit, approve, acceptNoEdit, resolve } from './workflow/review.js';
 import { artefactDetail, impactDetail, listImpacts } from './queries.js';
 
 export function createApp({ pool, secret, extractor, drafter = null, discoverer = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
@@ -71,6 +71,9 @@ export function createApp({ pool, secret, extractor, drafter = null, discoverer 
   app.patch('/api/impacts/:id/patch',reviewer,async (req,res) => res.json(await editPatch(pool,req.params.id,req.user,req.body ?? {})));
   app.post('/api/impacts/:id/submit',reviewer,async (req,res) => res.json(await submit(pool,req.params.id,req.user,req.body ?? {})));
   app.post('/api/impacts/:id/approve',approver,async (req,res) => res.json(await approve(pool,req.params.id,req.user,req.body ?? {})));
+  // Accepting a finding that proposes no edit: no version is written, so it is
+  // kept off /approve, which exists to apply a patch.
+  app.post('/api/impacts/:id/accept',approver,async (req,res) => res.json(await acceptNoEdit(pool,req.params.id,req.user,req.body ?? {})));
   app.post('/api/impacts/:id/reject',approver,async (req,res) => res.json(await resolve(pool,req.params.id,req.user,req.body ?? {},'REJECTED')));
   app.post('/api/impacts/:id/escalate',reviewer,async (req,res) => res.json(await resolve(pool,req.params.id,req.user,req.body ?? {},'ESCALATED')));
   app.use((req,res) => res.status(404).json({ error: 'Route not found' }));

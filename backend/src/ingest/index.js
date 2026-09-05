@@ -22,15 +22,11 @@ export async function ingest(pool, { buffer, name, type, userId, extractor, disc
   const concepts = await loadConcepts(pool, { force: discovered.length > 0 });
   // Provider calls happen before opening a transaction. Extraction has no database handle.
   //
-  // Two things keep a large document from costing one slow API call per
-  // paragraph. A segment that carries no digit cannot state a numeric rule, so
-  // it is skipped outright; the rest are extracted in small concurrent batches
-  // rather than strictly one after another. Skipped segments keep the same
-  // shape as a segment the model declined, so nothing downstream changes.
-  // A rule needs a quantity, but a quantity is not always a digit: "once every
-  // year" and "sixty-three years" both state one. Skip only text that carries
-  // neither a digit nor a number word, which is overwhelmingly headings and
-  // labels. Over-including costs an API call; under-including loses a rule.
+  // A segment stating no quantity cannot produce a numeric rule, so it is
+  // skipped; the rest run in small concurrent batches rather than strictly one
+  // after another. A quantity is not always a digit - "once every year" states
+  // one - so number words count too. Without this a long manual costs one slow
+  // API call per paragraph.
   const NUMBER_WORD = /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|annual|annually|monthly|weekly|daily|quarterly|biennial|each|every|per)\b/i;
   const extractable = segment =>
     format === 'JSON' || /\d/.test(segment.text) || NUMBER_WORD.test(segment.text);

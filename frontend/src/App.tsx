@@ -8,12 +8,13 @@ import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
 import { getAllClients, getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
-import { ROLE_LABEL, type Role } from "./lib/role";
+import { ROLE_LABEL, useRole, type Role } from "./lib/role";
 import { useSharedDocuments } from "./lib/sharedDocuments";
 import { useLiveDocuments } from "./lib/liveDocuments";
 import { api, ApiError, getToken, setToken } from "./api/client";
 import LoginScreen from "./components/LoginScreen";
-import type { User } from "./api/types";
+import type { RejectionReason, User } from "./api/types";
+import type { ResolveAction } from "./components/DocumentPaper";
 import type { ChangeStatus, SortKey } from "./types";
 
 function Logo() {
@@ -44,14 +45,16 @@ function LawyerApp() {
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState<User | null>(null);
   const { documents, error: loadError, reload, impactIdFor } = useLiveDocuments(token);
-  // Permissions follow the signed-in user's backend capability. A local role
-  // picker alongside real authentication was actively misleading: it hid the
-  // upload affordance from an APPROVER because the picker still said
-  // "Associate", while approval itself ignored the picker entirely.
-  const role: Role = user?.capability === "APPROVER" ? "senior_partner" : "associate";
-  const canUpload = user?.capability === "APPROVER" || user?.capability === "REVIEWER";
+  const [role, setRole] = useRole();
+  // Approval is granted by the backend capability, not the local role picker:
+  // the role selector previews what each seniority sees, but only an APPROVER
+  // token can actually write a new version, and the server enforces that.
+  const canUpload = role === "senior_partner";
   const canApprove = user?.capability === "APPROVER";
+  // A reviewer's step is submitting a drafted edit for someone else to approve.
+  const canSubmit = user?.capability === "REVIEWER";
   const [actionError, setActionError] = useState<string | null>(null);
+  const [busyClauseId, setBusyClauseId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -84,23 +87,41 @@ function LawyerApp() {
     setActiveTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
   }
 
-  // Approving a redline runs the real workflow: submit it, then approve it.
-  // The backend refuses if the same user does both, so separation of duties
-  // still holds exactly as it does over the API.
-  async function handleToggleApproval(_documentId: string, clauseId: string, approved: boolean) {
+  // Deciding a flagged clause runs the real workflow, never a local toggle.
+  //
+  // Accepting a proposed edit submits it and then approves it, which writes a
+  // new version of the artefact — the backend refuses if the same user does
+  // both, so separation of duties holds exactly as it does over the API.
+  // Accepting an uncertainty carries no edit to apply, so it resolves through
+  // /accept instead: the flag is recorded as read and the text stands.
+  // Submitting is the reviewer's half of that split, offered on drafts.
+  async function handleResolve(
+    _documentId: string,
+    clauseId: string,
+    action: ResolveAction,
+    reason: RejectionReason = "NOT_APPLICABLE",
+  ) {
     const id = impactIdFor(clauseId);
-    if (!id || !approved) return;
+    if (!id) return;
     setActionError(null);
+    setBusyClauseId(clauseId);
     try {
       const detail = await api.impact(id);
-      const submitted = detail.workflow_state === "SUBMITTED"
-        ? detail
-        : await api.submit(id, detail.revision);
-      await api.approve(id, submitted.revision);
+      if (action === "reject") {
+        await api.reject(id, detail.revision, reason);
+      } else if (action === "submit") {
+        await api.submit(id, detail.revision);
+      } else if (detail.proposed_patch) {
+        await api.approve(id, detail.revision);
+      } else {
+        await api.accept(id, detail.revision);
+      }
       reload();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Could not approve this change");
+      setActionError(e instanceof ApiError ? e.message : `Could not ${action} this finding`);
       reload();
+    } finally {
+      setBusyClauseId(null);
     }
   }
 
@@ -123,16 +144,24 @@ function LawyerApp() {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-6 py-5">
           <div className="flex items-center gap-3">
             <Logo />
-            <h1 className="font-serif text-[21px] font-medium leading-none tracking-tight text-ink">RegGraph</h1>
+            <h1 className="font-serif text-[21px] font-medium leading-none tracking-tight text-ink">Panopticon</h1>
           </div>
           <div className="flex items-center gap-3">
             <p className="hidden text-xs font-semibold uppercase tracking-wider text-ink-faint sm:block">
               Read-only search
             </p>
-            <div className="relative flex items-center">
-              <span className="rounded-full border border-line bg-surface py-2 px-4 text-xs font-medium text-ink">
-                {user ? `${user.name} · ${ROLE_LABEL[role]}` : "…"}
-              </span>
+            <div className="relative">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+                className="appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-9 text-xs font-medium text-ink hover:border-line-soft focus:outline-none focus:ring-1 focus:ring-ink-faint/30"
+              >
+                {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
@@ -212,13 +241,15 @@ function LawyerApp() {
             )}
           </div>
 
-          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-90px)]">
+          <div className="lg:sticky lg:top-6 lg:h-[calc(100vh-140px)]">
             {selected ? (
               <DocumentViewer
                 doc={selected}
                 documents={documents}
                 canApprove={canApprove}
-                onToggleApproval={handleToggleApproval}
+                canSubmit={canSubmit}
+                busyClauseId={busyClauseId}
+                onResolve={handleResolve}
               />
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-line text-sm text-ink-faint">
@@ -251,7 +282,7 @@ function IngestionConsole() {
           <div className="flex items-center gap-3.5">
             <Logo />
             <div>
-              <h1 className="font-serif italic text-xl font-medium leading-none text-ink">RegGraph</h1>
+              <h1 className="font-serif italic text-xl font-medium leading-none text-ink">Panopticon</h1>
               <p className="mt-1.5 text-xs text-ink-faint">Ingestion console</p>
             </div>
           </div>

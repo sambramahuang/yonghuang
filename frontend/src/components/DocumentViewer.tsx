@@ -7,8 +7,9 @@ import {
   getEffectiveStatus,
   summarizeChanges,
 } from "../lib/legalGraph";
+import type { RejectionReason } from "../api/types";
 import type { FirmDocument } from "../types";
-import DocumentPaper from "./DocumentPaper";
+import DocumentPaper, { type ResolveAction } from "./DocumentPaper";
 import ImpactGraphModal from "./ImpactGraphModal";
 import StatusBadge from "./StatusBadge";
 import SummaryModal from "./SummaryModal";
@@ -17,10 +18,19 @@ interface Props {
   doc: FirmDocument;
   documents: FirmDocument[];
   canApprove: boolean;
-  onToggleApproval: (documentId: string, clauseId: string, approved: boolean) => void;
+  canSubmit: boolean;
+  busyClauseId: string | null;
+  onResolve: (documentId: string, clauseId: string, action: ResolveAction, reason?: RejectionReason) => void;
 }
 
-export default function DocumentViewer({ doc, documents, canApprove, onToggleApproval }: Props) {
+export default function DocumentViewer({
+  doc,
+  documents,
+  canApprove,
+  canSubmit,
+  busyClauseId,
+  onResolve,
+}: Props) {
   const [showSummary, setShowSummary] = useState(false);
   const [showGraph, setShowGraph] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -39,7 +49,7 @@ export default function DocumentViewer({ doc, documents, canApprove, onToggleApp
       changes: summary.bullets.map((b) => ({
         clause: b.clauseHeading,
         authority: b.change.authority,
-        status: b.change.approved ? "approved" : "unapproved",
+        status: b.change.resolution ?? "open",
         summary: b.change.summary,
         detail: b.change.detail,
       })),
@@ -71,7 +81,7 @@ export default function DocumentViewer({ doc, documents, canApprove, onToggleApp
               <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                 {doc.type} · {doc.client}
               </p>
-              <h2 className="mt-1 break-words text-[19px] font-bold leading-snug tracking-tight text-ink">
+              <h2 className="mt-1 text-[19px] font-bold leading-snug tracking-tight text-ink">
                 {doc.title}
               </h2>
               <p className="mt-1 font-mono text-[11.5px] text-ink-soft">{doc.citation}</p>
@@ -131,7 +141,9 @@ export default function DocumentViewer({ doc, documents, canApprove, onToggleApp
             doc={doc}
             documents={documents}
             canApprove={canApprove}
-            onToggleApproval={(clauseId, approved) => onToggleApproval(doc.id, clauseId, approved)}
+            canSubmit={canSubmit}
+            busyClauseId={busyClauseId}
+            onResolve={(clauseId, action, reason) => onResolve(doc.id, clauseId, action, reason)}
           />
         </div>
 

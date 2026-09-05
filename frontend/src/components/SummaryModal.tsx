@@ -43,8 +43,7 @@ export default function SummaryModal({ doc, summary, onClose }: Props) {
       ) : (
         <ul className="space-y-3">
           {summary.bullets.map(({ clauseHeading, change, blastRadius }, i) => {
-            const affected = [...new Map(blastRadius.map((b) => [b.document.id, b.document])).values()];
-            const breakdown = getCategoryBreakdown(affected);
+            const breakdown = getCategoryBreakdown(blastRadius.map((b) => b.document));
             const breakdownText = Object.entries(breakdown)
               .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
               .join(" · ");
@@ -61,7 +60,7 @@ export default function SummaryModal({ doc, summary, onClose }: Props) {
                         : "border-bad-line bg-bad-bg text-bad"
                     }`}
                   >
-                    {change.approved ? "Approved" : "Pending approval"}
+                    {change.approved ? "Accepted" : "Pending decision"}
                   </span>
                 </div>
                 <p className="mt-2 text-sm font-semibold leading-snug text-ink">{change.summary}</p>
@@ -70,18 +69,18 @@ export default function SummaryModal({ doc, summary, onClose }: Props) {
                     <Redline segments={change.redline} approved={change.approved} />
                   </p>
                 )}
-                {change.detail !== change.summary && (
-                  <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
-                )}
+                <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
                 <p className="mt-2 text-xs italic text-ink-faint">
                   Authority: {change.authority} ({AUTHORITY_TYPE_LABEL[change.authorityType]}) · {change.date}
                 </p>
                 <p className="mt-2.5 border-t border-line pt-2.5 text-xs text-ink-soft">
                   <span className="font-semibold text-ink">
-                    Affects {affected.length} other document{affected.length !== 1 ? "s" : ""}
+                    Affects {blastRadius.length} other document{blastRadius.length !== 1 ? "s" : ""}
                     {breakdownText ? ` (${breakdownText})` : ""}:
                   </span>{" "}
-                  {affected.length > 0 ? affected.map((d) => d.title).join(", ") : "none"}
+                  {blastRadius.length > 0
+                    ? blastRadius.map((b) => b.document.title).join(", ")
+                    : "none"}
                 </p>
               </li>
             );

@@ -27,7 +27,6 @@
   },
   "devDependencies": {
     "docx": "^9.5.1",
-    "playwright": "^1.63.0",
     "supertest": "^7.1.4"
   }
 }

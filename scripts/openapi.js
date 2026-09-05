@@ -92,6 +92,7 @@ route('/impacts/{id}','get','Get both evidence sources and audit',ref('ImpactDet
 route('/impacts/{id}/patch','patch','Edit numeric replacement; invalidates prior submission',ref('Impact'),{ body: 'EditPatch' });
 route('/impacts/{id}/submit','post','Submit patch for separate approval',ref('Impact'),{ body: 'Revision' });
 route('/impacts/{id}/approve','post','APPROVER: approve another user\'s submission',ref('Approval'),{ body: 'Revision' });
+route('/impacts/{id}/accept','post','APPROVER: accept a finding that proposes no edit; no version is written',ref('Impact'),{ body: 'Revision' });
 route('/impacts/{id}/reject','post','APPROVER: reject a finding without changing content',ref('Impact'),{ body: 'Reject' });
 route('/impacts/{id}/escalate','post','Escalate a finding for counsel',ref('Impact'),{ body: 'Escalate' });
 
