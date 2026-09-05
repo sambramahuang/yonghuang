@@ -26,7 +26,7 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const [status, setStatus] = useState<Extract<ChangeStatus, "change" | "uncertain">>("change");
+  const [status, setStatus] = useState<Extract<ChangeStatus, "change">>("change");
   const [authority, setAuthority] = useState("");
   const [authorityType, setAuthorityType] = useState<AuthorityType>("case");
   const [originDocumentId, setOriginDocumentId] = useState("");
@@ -172,7 +172,6 @@ export default function UploadChangePanel({ documents, onIngested }: Props) {
             <label className={LABEL}>Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={FIELD}>
               <option value="change">Change — the required edit is known</option>
-              <option value="uncertain">Uncertain — outcome still pending</option>
             </select>
           </div>
           <div>

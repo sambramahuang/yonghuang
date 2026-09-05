@@ -21,17 +21,19 @@ export default function DocumentCard({ doc, documents, status, active, onClick }
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl p-[18px] text-left transition ${
+      className={`w-full min-w-0 overflow-hidden rounded-xl p-[18px] text-left transition ${
         active
           ? `${cfg.bg} shadow-md`
           : "border border-line bg-surface shadow-sm hover:shadow-md"
       }`}
     >
-      <div className="flex items-start justify-between gap-2.5">
-        <p className="text-[15px] font-semibold leading-snug text-ink">{doc.title}</p>
-        <StatusBadge status={status} size="sm" />
+      <div className="flex min-w-0 items-start justify-between gap-2.5">
+        <p className="min-w-0 break-words text-[15px] font-semibold leading-snug text-ink">{doc.title}</p>
+        <span className="shrink-0">
+          <StatusBadge status={status} size="sm" />
+        </span>
       </div>
-      <p className="mt-1 font-mono text-xs text-ink-soft">{doc.citation}</p>
+      <p className="mt-1 break-words font-mono text-xs text-ink-soft">{doc.citation}</p>
 
       {/* Third line, always present: the flagged count sits in the same place on
           every card so a stack of them can be scanned down a single column,

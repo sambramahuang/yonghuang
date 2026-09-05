@@ -40,7 +40,7 @@ Each object:
   "unit":                 string | null,
   "assertion_type":       "STATES_LAW" | "STATES_POLICY" | "STATES_BOTH",
   "temporal_frame":       "PRESENT" | "HISTORICAL" | "FUTURE",
-  "applies_to_condition": string | null,      // quote the condition verbatim; do not summarise
+  "applies_to_condition": string | null,      // ONLY a genuine carve-out; see FIELD RULES
   "evidence_quote":       string,             // EXACT substring of the input, verbatim
   "extraction_confidence":"HIGH" | "LOW"
 }
@@ -62,9 +62,21 @@ temporal_frame
   FUTURE     - asserts a position that takes effect on a stated future date.
 
 applies_to_condition
-  If the claim is limited by a condition (who it applies to, when, subject to what), quote that
-  condition here, verbatim. Do not paraphrase and do not attempt to interpret it.
-  If there is no condition, use null.
+  Only for a genuine CARVE-OUT that narrows when the stated value applies - a clause that could
+  make the number wrong in some cases. Quote it verbatim; do not paraphrase or interpret.
+
+  Set it when the sentence contains an exception or override, e.g.
+    "unless the employee is medically unfit"
+    "subject to any higher frequency directed by the Commissioner"
+    "except for emergency changes"
+
+  Use null otherwise. In particular, null when:
+    - the clause simply describes what must be done ("The Provider shall notify the Customer...")
+    - it names who the duty falls on, or what triggers it in the ordinary course
+    - the phrase you would quote is the whole sentence, or nearly all of it
+
+  A non-null value stops the system proposing any automatic edit, so a condition that does not
+  actually restrict the number costs a correct, checkable patch. When in doubt, use null.
 
 evidence_quote
   Must be an EXACT substring of the input text, copied character for character. If you cannot

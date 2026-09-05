@@ -9,7 +9,7 @@ interface Props {
   onToggleType: (type: string) => void;
 }
 
-const ALL_STATUSES: ChangeStatus[] = ["change", "no_change", "uncertain"];
+const ALL_STATUSES: ChangeStatus[] = ["change", "no_change"];
 
 export default function FilterBar({
   statuses,

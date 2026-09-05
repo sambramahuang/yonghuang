@@ -55,7 +55,7 @@ export function getBlastRadiusForChange(
   return entries;
 }
 
-// Union of blast radius across every changed/uncertain clause in the document.
+// Union of blast radius across every changed clause in the document.
 export function getBlastRadiusForDocument(
   doc: FirmDocument,
   documents: FirmDocument[],
@@ -242,7 +242,7 @@ export function getAllClients(documents: FirmDocument[]): string[] {
 export interface ChangeDraft {
   originDocumentId: string;
   originClauseId: string;
-  status: Extract<ChangeStatus, "change" | "uncertain">;
+  status: Extract<ChangeStatus, "change">;
   authority: string;
   authorityType: SuggestedChange["authorityType"];
   date: string;

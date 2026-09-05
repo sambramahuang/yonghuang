@@ -21,13 +21,15 @@ import type {
  * visible rather than absent.
  */
 
-// The backend's four machine verdicts collapse to the three the UI shows.
-// LEGAL_REVIEW_REQUIRED and POSSIBLE_IMPACT both mean "a human must look",
-// which is exactly what "uncertain" conveys.
+// The backend's four machine verdicts collapse to the two the UI shows. Anything
+// that is not already correct needs a human to act on it, so it reads as
+// "change" whether the system can verify the edit or only draft it. The clause
+// itself shows which, so a reviewer never mistakes drafted wording for a
+// checked value swap.
 const STATUS: Record<SystemStatus, ChangeStatus> = {
   UPDATE_NEEDED: "change",
-  LEGAL_REVIEW_REQUIRED: "uncertain",
-  POSSIBLE_IMPACT: "uncertain",
+  LEGAL_REVIEW_REQUIRED: "change",
+  POSSIBLE_IMPACT: "change",
   CURRENT: "no_change",
 };
 
@@ -106,28 +108,17 @@ interface Segment {
   char_start: number;
 }
 
-/**
- * One clause per segment, so the reader sees the whole document and can judge
- * a flagged paragraph in its own context — not just the isolated paragraphs
- * that happen to carry a finding. A segment with no finding is plain text
- * with status "no_change"; a finding contributes the status, redline, and the
- * accept/reject/submit workflow state.
- */
-function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | undefined, updateTitle: string): Clause {
-  const text = segment.text ?? "";
-  const base: Clause = {
-    id: impact ? `impact-${impact.id}` : `segment-${segment.id}`,
-    documentId: `artefact-${artefactId}`,
-    heading: segment.locator,
-    text,
-    status: "no_change",
-  };
-  if (!impact) return base;
-
-  // Patch offsets are absolute within the version's raw_text; the segment's
-  // own start rebases them onto this clause.
+function toClause(impact: ImpactSummary, updateTitles: Map<string, string>): Clause {
+  // segment_text is the clause; patch offsets are absolute, so the clause's
+  // own start is needed to place the redline within it. The list endpoint does
+  // not carry char_start, so a VALUE patch is located by its old value instead.
+  const text = impact.segment_text ?? "";
   const patch = impact.proposed_patch;
-  const offset = segment.char_start;
+  let offset = 0;
+  if (patch && patch.kind !== "TEXT") {
+    const local = text.indexOf(patch.old);
+    offset = local >= 0 ? patch.start - local : patch.start;
+  }
   // A resolved finding is settled: it no longer flags the document, so it
   // drops to "no change" and the redline collapses into plain text — the
   // accepted wording if it was approved, the untouched original if not.
@@ -135,12 +126,14 @@ function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | 
   const settledText = resolution === "accepted" ? applyPatch(text, patch, offset) : text;
 
   return {
-    ...base,
+    id: `impact-${impact.id}`,
+    documentId: `artefact-${impact.artefact_id}`,
+    heading: impact.locator ?? "",
     text: settledText,
-    status: resolution ? "no_change" : STATUS[impact.system_status] ?? "uncertain",
+    status: resolution ? "no_change" : STATUS[impact.system_status] ?? "change",
     change: {
       id: `change-${impact.id}`,
-      authority: updateTitle,
+      authority: updateTitles.get(String(impact.update_id)) ?? "a regulatory update",
       authorityType: "statute",
       date: impact.resolved_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
       summary: impact.explanation,
@@ -150,8 +143,20 @@ function toClause(segment: Segment, artefactId: string, impact: ImpactSummary | 
       resolution,
       hasPatch: !!patch,
       patchText: patch?.new,
+      verified: patch?.verified === true,
       awaitingSubmission: !!patch && impact.workflow_state === "DRAFT",
     },
+  };
+}
+
+/** A segment with no finding: plain document text, nothing flagged. */
+function plainClause(segment: Segment, artefactId: string): Clause {
+  return {
+    id: `segment-${segment.id}`,
+    documentId: `artefact-${artefactId}`,
+    heading: segment.locator,
+    text: segment.text ?? "",
+    status: "no_change",
   };
 }
 
@@ -195,39 +200,19 @@ export function useLiveDocuments(token: string): LiveState {
           byArtefact.get(key)!.push(impact);
         }
 
-        // Fetch each artefact in full so the reader sees the whole document,
-        // not only the paragraphs that happen to carry a finding.
-        const details = await Promise.all(
-          artefacts.map(async (a) => {
-            try {
-              return { a, detail: await api.artefact(String(a.id)) };
-            } catch {
-              return { a, detail: null };
-            }
-          }),
-        );
-        if (!live) return;
-
-        setDocuments(
-          details.map(({ a, detail }) => {
+        // The list renders from summary data first: fetching every artefact's
+        // full text before the first paint left sign-in appearing to hang.
+        // Each document's text then fills in as it arrives, so a flagged clause
+        // can be read in the context of the document around it.
+        const details = new Map<string, { segments?: Segment[] }>();
+        const build = () =>
+          artefacts.map((a) => {
             const found = byArtefact.get(String(a.id)) ?? [];
             // Resolved findings stay on the document as settled clauses, but
             // they are no longer open work, so the summary counts only the rest.
             const open = found.filter((i) => i.resolution === null);
-            const updateTitleFor = (updateId: string) => updateTitles.get(updateId) ?? "a regulatory update";
-            const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
-            const segments = detail?.segments ?? [];
-            const clauses = segments.length
-              ? segments.map((seg) => toClause(seg, String(a.id), bySegment.get(String(seg.id)), updateTitleFor(bySegment.get(String(seg.id))?.update_id ?? "")))
-              : found.map((i) =>
-                  toClause(
-                    { id: Number(i.segment_id), ordinal: 0, locator: i.locator, text: i.segment_text ?? "", char_start: 0 },
-                    String(a.id),
-                    i,
-                    updateTitleFor(i.update_id),
-                  ),
-                );
-            const openUpdateNames = [...new Set(open.map((i) => updateTitleFor(i.update_id)))];
+            const updateNamesFor = (list: ImpactSummary[]) =>
+              [...new Set(list.map((i) => updateTitles.get(String(i.update_id)) ?? "a regulatory update"))].join("; ");
             return {
               id: `artefact-${a.id}`,
               title: a.name,
@@ -237,14 +222,37 @@ export function useLiveDocuments(token: string): LiveState {
               practiceAreas: [...new Set(found.map((i) => i.concept))].slice(0, 3),
               lastUpdated: new Date().toISOString().slice(0, 10),
               summary: open.length
-                ? `${open.length} open finding${open.length === 1 ? "" : "s"} against ${openUpdateNames.join("; ")}.`
+                ? `${open.length} open finding${open.length === 1 ? "" : "s"} against ${updateNamesFor(open)}.`
                 : found.length
-                  ? `All ${found.length} finding${found.length === 1 ? "" : "s"} have been resolved.`
-                  : "No findings against any current regulatory update.",
-              clauses,
+                  ? `All ${found.length} finding${found.length === 1 ? "" : "s"} against ${updateNamesFor(found)} have been resolved.`
+                  : "No findings against the current regulatory update.",
+              clauses: (() => {
+                const segments = details.get(String(a.id))?.segments ?? [];
+                if (!segments.length) return found.map((i) => toClause(i, updateTitles));
+                const bySegment = new Map(found.map((i) => [String(i.segment_id), i]));
+                return segments.map((seg) => {
+                  const impact = bySegment.get(String(seg.id));
+                  return impact ? toClause(impact, updateTitles) : plainClause(seg, String(a.id));
+                });
+              })(),
             };
+          });
+
+        setDocuments(build());
+        setLoading(false);
+
+        await Promise.all(
+          artefacts.map(async (a) => {
+            try {
+              const detail = await api.artefact(String(a.id));
+              details.set(String(a.id), detail as { segments?: Segment[] });
+              if (live) setDocuments(build());
+            } catch {
+              /* a document that will not load keeps its finding-only view */
+            }
           }),
         );
+        if (!live) return;
         setError(null);
       } catch (e) {
         if (live) setError(e instanceof ApiError ? e.message : "Failed to load documents");

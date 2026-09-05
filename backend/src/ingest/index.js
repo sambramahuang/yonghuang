@@ -21,8 +21,29 @@ export async function ingest(pool, { buffer, name, type, userId, extractor, disc
   const discovered = format === 'JSON' ? [] : await discoverConcepts(pool, { text: parsed.raw_text, discoverer });
   const concepts = await loadConcepts(pool, { force: discovered.length > 0 });
   // Provider calls happen before opening a transaction. Extraction has no database handle.
-  const results = [];
-  for (const segment of parsed.segments) results.push(await extractRules(segment, { name, format, extractor, concepts }));
+  //
+  // A segment stating no quantity cannot produce a numeric rule, so it is
+  // skipped; the rest run in small concurrent batches rather than strictly one
+  // after another. A quantity is not always a digit - "once every year" states
+  // one - so number words count too. Without this a long manual costs one slow
+  // API call per paragraph.
+  const NUMBER_WORD = /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|annual|annually|monthly|weekly|daily|quarterly|biennial|each|every|per)\b/i;
+  const extractable = segment =>
+    format === 'JSON' || /\d/.test(segment.text) || NUMBER_WORD.test(segment.text);
+  const empty = { rules: [], confidence: 'LOW', error: 'No numeric content to extract' };
+  const results = new Array(parsed.segments.length);
+  const pending = parsed.segments
+    .map((segment, index) => ({ segment, index }))
+    .filter(({ segment, index }) => (extractable(segment) ? true : ((results[index] = empty), false)));
+
+  const CONCURRENCY = 8;
+  for (let i = 0; i < pending.length; i += CONCURRENCY) {
+    const batch = pending.slice(i, i + CONCURRENCY);
+    const extracted = await Promise.all(
+      batch.map(({ segment }) => extractRules(segment, { name, format, extractor, concepts })),
+    );
+    batch.forEach(({ index }, n) => { results[index] = extracted[n]; });
+  }
   return transaction(pool, async db => {
     const artefact = (await db.query('INSERT INTO artefacts(name,type,format) VALUES($1,$2,$3) RETURNING *', [name,type,format])).rows[0];
     const version = (await db.query("INSERT INTO artefact_versions(artefact_id,version,raw_text,status,created_by) VALUES($1,1,$2,'CURRENT',$3) RETURNING *", [artefact.id,parsed.raw_text,userId])).rows[0];

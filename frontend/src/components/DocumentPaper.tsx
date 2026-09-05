@@ -82,8 +82,8 @@ function PaperClause({
   const AuthorityIcon = change ? AUTHORITY_ICON[change.authorityType] : null;
   const chip = decisionChip(clause);
   // Both flagged categories are decidable: a proposed edit is accepted or
-  // rejected, and an uncertainty is confirmed as read or dismissed.
-  const unresolved = !!change && !change.resolution && (clause.status === "change" || clause.status === "uncertain");
+  // rejected, and a flag with nothing to apply is confirmed as read or dismissed.
+  const unresolved = !!change && !change.resolution && clause.status === "change";
   const decidable = unresolved && canApprove;
   // A drafted edit has to be submitted by someone other than the approver, so
   // the reviewer gets that step and the approver is held until it lands.
@@ -272,6 +272,22 @@ function PaperClause({
             </span>
             <span className="font-mono text-xs text-ink-faint">{change.date}</span>
           </div>
+          {change.hasPatch && (
+            // One status covers both kinds of edit, so the evidence behind this
+            // one is named here: a reviewer must never approve drafted wording
+            // believing a rule checked it.
+            <p
+              className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${
+                change.verified
+                  ? "border-good-line bg-good-bg text-good"
+                  : "border-seminal-line bg-seminal-bg text-seminal"
+              }`}
+            >
+              {change.verified
+                ? "Verified edit — the old value was matched in the document"
+                : "AI-drafted wording — read it before approving"}
+            </p>
+          )}
           <p className="mt-2.5 text-sm font-semibold leading-snug text-ink">{change.summary}</p>
           <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{change.detail}</p>
           <div className="mt-3.5 rounded-lg bg-surface p-3">

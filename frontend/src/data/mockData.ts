@@ -88,7 +88,7 @@ export const DOCUMENTS: FirmDocument[] = [
         documentId: "doc-hr-playbook",
         heading: "Step 6 — Screening variables",
         text: "Recruitment screening may use postal sector as a locality-fit signal alongside other factors.",
-        status: "uncertain",
+        status: "change",
         change: {
           id: "ch-hrp-2",
           authority: LIM_CASE,
@@ -253,7 +253,7 @@ export const DOCUMENTS: FirmDocument[] = [
         documentId: "doc-client-advisory-algo",
         heading: "§4 — Discrimination risk in underwriting and screening",
         text: "Advisory flags proxy-variable discrimination as an emerging, unsettled risk area pending the outcome of a closely watched High Court decision.",
-        status: "uncertain",
+        status: "change",
         change: {
           id: "ch-cla-2",
           authority: LIM_CASE,
@@ -607,7 +607,7 @@ export const DOCUMENTS: FirmDocument[] = [
         documentId: "doc-vendor-checklist",
         heading: "Item 6 — Breach notification SLA",
         text: "Confirm the vendor's contract requires breach notification to the firm within 72 hours of discovery.",
-        status: "uncertain",
+        status: "change",
         change: {
           id: "ch-voc-1",
           authority: BREACH_GUIDANCE,
@@ -664,7 +664,7 @@ export const DOCUMENTS: FirmDocument[] = [
         documentId: "doc-breach-checklist",
         heading: "Step 4 — Notify PDPC",
         text: "Notify the PDPC within 3 business days of assessing the breach as notifiable.",
-        status: "uncertain",
+        status: "change",
         change: {
           id: "ch-dbc-1",
           authority: BREACH_GUIDANCE,
@@ -1058,7 +1058,7 @@ export const DOCUMENTS: FirmDocument[] = [
         documentId: "doc-monitoring-dashboard",
         heading: "Alert 5 — Proxy variable screening",
         text: "Flags underwriting and screening models using postal sector as a variable for manual fairness review.",
-        status: "uncertain",
+        status: "change",
         change: {
           id: "ch-cmd-1",
           authority: LIM_CASE,
