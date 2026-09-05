@@ -19,7 +19,12 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 // Console errors and failed requests are the "many errors" worth catching.
 const consoleErrors = [];
 const failedRequests = [];
-page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+let expectFailedAuth = false;
+const isExpected = text =>
+  expectFailedAuth && /401|Unauthorized/i.test(text);
+page.on('console', m => {
+  if (m.type() === 'error' && !isExpected(m.text())) consoleErrors.push(m.text());
+});
 page.on('pageerror', e => consoleErrors.push(`pageerror: ${e.message}`));
 page.on('requestfailed', r => failedRequests.push(`${r.method()} ${r.url()} — ${r.failure()?.errorText}`));
 
@@ -43,12 +48,14 @@ try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   record('A1 login screen renders', await page.getByRole('button', { name: /sign in/i }).count() > 0);
 
+  expectFailedAuth = true;
   await page.locator('#username, input[autocomplete="username"]').first().fill('rachel');
   await page.locator('#password, input[type="password"]').first().fill('wrongpassword');
   await page.getByRole('button', { name: /sign in/i }).click();
   await page.getByRole('alert').waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   const rejected = await page.getByRole('alert').count() > 0;
   record('A2 wrong password is rejected', rejected);
+  expectFailedAuth = false;
 
   await signIn('rachel', 'reviewer123');
   const signedIn = await page.getByRole('button', { name: /sign out/i }).count() > 0;
