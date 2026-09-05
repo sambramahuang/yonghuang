@@ -58,8 +58,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       },
     });
   } catch {
-    // fetch only rejects on transport failure, so this is genuinely "no server".
-    throw new ApiError(0, `Cannot reach the API at ${BASE}. Is \`npm start\` running?`);
+    // fetch rejects identically for a dead server and a blocked CORS response,
+    // so name both causes rather than sending the reader after the wrong one.
+    // The browser console distinguishes them; the UI cannot.
+    throw new ApiError(
+      0,
+      `Cannot reach the API at ${BASE}. Check that the backend is running (\`npm start\`), and ` +
+        `that this page's origin (${window.location.origin}) is listed in the backend's CORS_ORIGIN.`,
+    );
   }
 
   if (!response.ok) {

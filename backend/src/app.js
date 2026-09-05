@@ -12,9 +12,13 @@ import { artefactDetail, impactDetail, listImpacts } from './queries.js';
 export function createApp({ pool, secret, extractor, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
   const app = express();
   app.disable('x-powered-by');
+  // Accepts a comma-separated list so Vite's port fallback (5173 -> 5174) does
+  // not silently break every request with an opaque CORS failure.
+  const allowedOrigins = new Set(String(corsOrigin).split(',').map(o => o.trim()).filter(Boolean));
   app.use((req,res,next) => {
-    if (req.get('origin') === corsOrigin) {
-      res.set('Access-Control-Allow-Origin',corsOrigin);
+    const origin = req.get('origin');
+    if (origin && allowedOrigins.has(origin)) {
+      res.set('Access-Control-Allow-Origin',origin);
       res.set('Vary','Origin');
       res.set('Access-Control-Allow-Headers','Authorization, Content-Type');
       res.set('Access-Control-Allow-Methods','GET, POST, PATCH, OPTIONS');

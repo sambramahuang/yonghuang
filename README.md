@@ -88,10 +88,11 @@ npm install
 npm run dev
 ```
 
-It expects the backend on `http://127.0.0.1:3001/api` (override with `VITE_API_BASE`) and must
-be served from `http://localhost:5173`, the origin the backend's CORS allows. If Vite reports
-that port is in use it will pick another one, and requests will then be blocked by CORS — free
-5173 rather than accepting the fallback.
+It expects the backend on `http://127.0.0.1:3001/api` (override with `VITE_API_BASE`). The
+backend's `CORS_ORIGIN` accepts a comma-separated list and allows both `http://localhost:5173`
+and `:5174`, so Vite's port fallback works either way. Serving the app from any other origin
+needs that origin adding to `CORS_ORIGIN` in `.env`, followed by a backend restart — otherwise
+the browser blocks every response and the UI reports that it cannot reach the API.
 
 There is no login route by design. Mint a token with `npm run token -- reviewer` (or `approver`)
 and paste it into the prompt on first load; it is kept in `localStorage`. "Switch" clears it, which
