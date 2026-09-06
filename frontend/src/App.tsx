@@ -26,7 +26,10 @@ function LawyerApp() {
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState<User | null>(null);
   const { documents, error: loadError, reload, impactIdFor } = useLiveDocuments(token);
-  const canUpload = user?.capability === "REVIEWER";
+  // An approver is the senior capability and the backend grants it every
+  // reviewer permission too (see requireCapability); hiding upload from them
+  // would contradict the server, which accepts the request either way.
+  const canUpload = user?.capability === "REVIEWER" || user?.capability === "APPROVER";
   const canApprove = user?.capability === "APPROVER";
   // A reviewer's step is submitting a drafted edit for someone else to approve.
   const canSubmit = user?.capability === "REVIEWER";

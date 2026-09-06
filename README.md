@@ -9,7 +9,7 @@ and that proposal is re-validated by the same checks a hand-written submission g
 anything is stored. Either path analyses immediately, flagging every artefact in the system that
 the change actually affects.
 
-See [Frontend](#frontend) below for the React app, and [the API guide](docs/API.md), [OpenAPI contract](docs/openapi.json), and [JavaScript client](client/api.js) for the API itself.
+See [the architecture diagrams](docs/ARCHITECTURE.md) for the system, data-flow, workflow and data-model views. See [Frontend](#frontend) below for the React app, and [the API guide](docs/API.md), [OpenAPI contract](docs/openapi.json), and [JavaScript client](client/api.js) for the API itself.
 
 ## Run locally
 
