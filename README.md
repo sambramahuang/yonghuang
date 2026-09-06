@@ -102,11 +102,9 @@ needs that origin adding to `CORS_ORIGIN` in `.env`, followed by a backend resta
 the browser blocks every response and the UI reports that it cannot reach the API.
 
 Sign in with a seeded username/password (see [Seeded accounts](#seeded-accounts)) — `POST
-/api/login` mints a bearer token that's kept in `localStorage`; "Sign out" clears it. A separate
-Associate/Senior Partner dropdown in the header only previews what each seniority sees in the UI
-copy — it grants nothing. Every real permission (uploading, editing, submitting, approving) is
-enforced by the signed-in user's actual backend capability (REVIEWER or APPROVER), independent of
-that dropdown.
+/api/login` mints a bearer token that's kept in `localStorage`; "Sign out" clears it. Every
+permission (uploading, editing, submitting, approving) is enforced by the signed-in user's
+backend capability — REVIEWER or APPROVER — with no separate role picker in the UI.
 
 The main screen is a searchable, filterable list of every document in the system (status: changed
 vs. unchanged; type; free text) next to a document viewer showing the full text as continuous

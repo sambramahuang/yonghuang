@@ -7,7 +7,6 @@ import Modal from "./components/Modal";
 import SearchBar from "./components/SearchBar";
 import UploadChangePanel from "./components/UploadChangePanel";
 import { getAllTypes, getEffectiveStatus, searchDocuments } from "./lib/legalGraph";
-import { ROLE_LABEL, useRole, type Role } from "./lib/role";
 import { useLiveDocuments } from "./lib/liveDocuments";
 import { api, ApiError, getToken, setToken } from "./api/client";
 import LoginScreen from "./components/LoginScreen";
@@ -27,14 +26,9 @@ function LawyerApp() {
   const [token, setTokenState] = useState(getToken());
   const [user, setUser] = useState<User | null>(null);
   const { documents, error: loadError, reload, impactIdFor } = useLiveDocuments(token);
-  const [role, setRole] = useRole();
-  // The role picker only previews what each seniority sees in the UI copy —
-  // every actual permission (upload, submit, approve) is granted by the
-  // signed-in user's real backend capability, which the server enforces
-  // independently regardless of what this dropdown says.
-  // An approver is the senior role and the backend grants it every reviewer
-  // permission (see requireCapability); hiding upload from them contradicted
-  // the server, which accepts the request.
+  // An approver is the senior capability and the backend grants it every
+  // reviewer permission too (see requireCapability); hiding upload from them
+  // would contradict the server, which accepts the request either way.
   const canUpload = user?.capability === "REVIEWER" || user?.capability === "APPROVER";
   const canApprove = user?.capability === "APPROVER";
   // A reviewer's step is submitting a drafted edit for someone else to approve.
@@ -136,36 +130,13 @@ function LawyerApp() {
             <h1 className="font-serif text-[21px] font-medium leading-none tracking-tight text-ink">Panopticon</h1>
           </div>
           <div className="flex items-center gap-3">
-            <p className="hidden text-xs font-semibold uppercase tracking-wider text-ink-faint sm:block">
-              Read-only search
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="relative rounded-lg border border-line bg-surface">
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as Role)}
-                  className="appearance-none border-none bg-transparent py-1.5 pl-2.5 pr-7 text-xs font-medium text-ink hover:text-ink-soft focus:outline-none"
-                >
-                  {(Object.keys(ROLE_LABEL) as Role[]).map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABEL[r]}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={14}
-                  strokeWidth={2.25}
-                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
-                className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:bg-surface-2 hover:text-ink"
-              >
-                Sign out{user ? ` (${user.capability})` : ""}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => { setToken(""); setTokenState(""); setUser(null); }}
+              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:bg-surface-2 hover:text-ink"
+            >
+              Sign out{user ? ` (${user.capability})` : ""}
+            </button>
             {canUpload && (
               <button
                 type="button"

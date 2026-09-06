@@ -126,6 +126,18 @@ export const api = {
     const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `document-${id}.txt`;
     return { blob: await res.blob(), name };
   },
+  // A formatted export of the current version's audit trail — the regulatory
+  // changes it was verified against and who resolved each one. No new data;
+  // see backend/src/certificate.js.
+  downloadCertificate: async (id: string) => {
+    const res = await fetch(`${BASE}/artefacts/${id}/certificate`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) throw new ApiError(res.status, `Certificate failed (${res.status})`);
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `certificate-${id}.txt`;
+    return { blob: await res.blob(), name };
+  },
 
   artefact: (id: string) =>
     request<
@@ -135,10 +147,20 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     form.append("type", type);
-    return upload<{ id: string; name: string; format: string; version_id: number; version: number; segment_count: number; rule_count: number }>(
-      "/artefacts",
-      form,
-    );
+    // The backend also checks this document against every regulatory change
+    // already on file as it ingests — findings_created/not_actioned report
+    // that retroactive check, same shapes as analyse() in impact/match.js.
+    return upload<{
+      id: string;
+      name: string;
+      format: string;
+      version_id: number;
+      version: number;
+      segment_count: number;
+      rule_count: number;
+      findings_created?: number;
+      not_actioned?: { segment_id: number; artefact_id: number; name: string; locator: string; text: string; reason: string }[];
+    }>("/artefacts", form);
   },
 
   regulatoryUpdates: () => request<RegulatoryUpdate[]>("/regulatory-updates"),
