@@ -83,6 +83,19 @@ const MIGRATIONS = [
         OR modality IN ('MUST','MUST_NOT'))`);
     },
   },
+  {
+    version: 6,
+    // A senior partner may review and approve their own wording: the authority
+    // to sign off sits with them, and only an APPROVER can approve at all.
+    // The audit trail still records each action against its actor.
+    async up(db) {
+      await db.query('ALTER TABLE impact_results DROP CONSTRAINT IF EXISTS approver_is_not_proposer');
+      const { rows } = await db.query(`SELECT conname FROM pg_constraint
+        WHERE conrelid='impact_results'::regclass AND contype='c'
+          AND pg_get_constraintdef(oid) LIKE '%approved_by%DISTINCT FROM%submitted_by%'`);
+      for (const row of rows) await db.query(`ALTER TABLE impact_results DROP CONSTRAINT "${row.conname}"`);
+    },
+  },
 ];
 
 export async function migrate(pool) {

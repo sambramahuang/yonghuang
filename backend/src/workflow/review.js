@@ -62,7 +62,10 @@ export async function approve(pool, id, user, { revision }) {
     const approvable = impact.system_status === 'UPDATE_NEEDED'
       || (impact.system_status === 'LEGAL_REVIEW_REQUIRED' && impact.proposed_patch?.kind === 'TEXT');
     ensure(impact.workflow_state === 'SUBMITTED' && approvable && impact.proposed_patch, 409, 'A submitted patch is required');
-    ensure(String(user.id) !== String(impact.edited_by) && String(user.id) !== String(impact.submitted_by), 403, 'An approver cannot approve their own edit or submission');
+    // A senior partner carries the authority to review and approve their own
+    // wording, so approving an edit you made yourself is permitted. The audit
+    // trail still records both actions against the same name, so who did what
+    // remains answerable.
     const current = (await db.query('SELECT * FROM artefact_versions WHERE id=$1', [artefact.current_version_id])).rows[0];
     const base = (await db.query('SELECT * FROM artefact_versions WHERE id=$1', [impact.proposed_patch.base_version_id])).rows[0];
     ensure(base && base.artefact_id === artefact.id && base.version <= current.version, 409, 'Invalid patch base version');

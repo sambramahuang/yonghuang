@@ -198,8 +198,10 @@ Two capabilities for the MVP. Seed two users; no signup flow, no password reset.
 | `REVIEWER` | view findings, inspect evidence, edit the proposed patch, submit for approval |
 | `APPROVER` | everything above, plus approve / reject, which writes a new artefact version |
 
-Enforced by Express middleware on the route, not in the UI. An approver must not approve their own
-edit — enforced by a DB check constraint (`approved_by IS DISTINCT FROM edited_by`).
+Enforced by Express middleware on the route, not in the UI. An APPROVER holds every REVIEWER
+permission and may edit, submit and approve the same finding: the authority to sign off sits with
+the partner, and the audit trail records each action against its actor either way. Approval itself
+remains an APPROVER capability, so a reviewer cannot approve their own work.
 
 ## 12. Explicitly out of scope
 

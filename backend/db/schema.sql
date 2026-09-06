@@ -90,8 +90,7 @@ CREATE TABLE impact_results (
     OR (proposed_patch->>'kind' = 'TEXT' AND system_status IN ('UPDATE_NEEDED','LEGAL_REVIEW_REQUIRED'))),
   CONSTRAINT text_patch_unverified CHECK (proposed_patch IS NULL OR proposed_patch->>'kind' <> 'TEXT'
     OR (proposed_patch->>'verified')::boolean IS FALSE),
-  CONSTRAINT approver_is_not_proposer CHECK (approved_by IS NULL OR approved_by IS DISTINCT FROM edited_by),
-  CHECK (approved_by IS NULL OR approved_by IS DISTINCT FROM submitted_by),
+
   CHECK ((workflow_state='RESOLVED') = (resolution IS NOT NULL)),
   CHECK (resolution IS DISTINCT FROM 'ACCEPTED' OR (approved_by IS NOT NULL AND resolving_version_id IS NOT NULL))
 );
