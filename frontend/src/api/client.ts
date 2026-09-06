@@ -116,6 +116,17 @@ export const api = {
   artefacts: () => request<Artefact[]>("/artefacts"),
   // Full text: every segment of the artefact's analysed version, not just the
   // ones with a finding, so the reader sees the whole document in context.
+  /** The current version's text, as the backend serves it for download. */
+  downloadArtefact: async (id: string) => {
+    const res = await fetch(`${BASE}/artefacts/${id}/download`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) throw new ApiError(res.status, `Download failed (${res.status})`);
+    const disposition = res.headers.get("content-disposition") ?? "";
+    const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `document-${id}.txt`;
+    return { blob: await res.blob(), name };
+  },
+
   artefact: (id: string) =>
     request<
       Artefact & { segments: { id: number; ordinal: number; locator: string; text: string; char_start: number }[] }

@@ -24,6 +24,9 @@ export function createApp({ pool, secret, extractor, drafter = null, discoverer 
       res.set('Access-Control-Allow-Origin',origin);
       res.set('Vary','Origin');
       res.set('Access-Control-Allow-Headers','Authorization, Content-Type');
+      // Without this the browser hides Content-Disposition from scripts, so a
+      // cross-origin download cannot recover the document's real filename.
+      res.set('Access-Control-Expose-Headers','Content-Disposition');
       res.set('Access-Control-Allow-Methods','GET, POST, PATCH, OPTIONS');
     }
     res.set('X-Content-Type-Options','nosniff');
