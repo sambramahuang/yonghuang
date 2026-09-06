@@ -16,30 +16,36 @@ import { createPool, transaction } from '../backend/src/db.js';
 const pool = createPool();
 
 try {
+  // Batched into one multi-statement query: each round-trip to Supabase costs
+  // ~300ms of network latency, so a dozen separate statements spent seconds
+  // waiting on work that is itself instant. The transaction is managed by
+  // node-postgres rather than inline BEGIN/COMMIT, which a simple query does
+  // not honour.
   const { removed, rewound } = await transaction(pool, async db => {
-    // Versions and audit rows are immutable to the application by design. This
-    // is operator reset, so the guards are lifted for this transaction only.
-    await db.query('ALTER TABLE artefact_versions DISABLE TRIGGER immutable_versions');
-    await db.query('ALTER TABLE audit_events DISABLE TRIGGER immutable_audit');
+    const counts = (await db.query(`SELECT
+      (SELECT count(*) FROM regulatory_updates)::int AS removed,
+      (SELECT count(*) FROM artefact_versions WHERE version > 1)::int AS rewound`)).rows[0];
 
-    await db.query('DELETE FROM audit_events');
-    await db.query('DELETE FROM impact_results');
-    await db.query('DELETE FROM regulatory_changes');
-    const updates = await db.query('DELETE FROM regulatory_updates RETURNING id');
-
-    // Repoint each document at version 1 BEFORE deleting the later versions:
-    // the artefact row still references whichever version is current, and the
-    // foreign key will refuse the delete otherwise.
-    await db.query(`UPDATE artefacts a SET current_version_id = v.id, analysis_version_id = v.id
-      FROM artefact_versions v WHERE v.artefact_id = a.id AND v.version = 1`);
-    await db.query(`DELETE FROM artefact_segments
-      WHERE version_id IN (SELECT id FROM artefact_versions WHERE version > 1)`);
-    const versions = await db.query('DELETE FROM artefact_versions WHERE version > 1 RETURNING id');
-    await db.query("UPDATE artefact_versions SET status = 'CURRENT' WHERE version = 1");
-
-    await db.query('ALTER TABLE artefact_versions ENABLE TRIGGER immutable_versions');
-    await db.query('ALTER TABLE audit_events ENABLE TRIGGER immutable_audit');
-    return { removed: updates.rowCount, rewound: versions.rowCount };
+    await db.query(`
+      ALTER TABLE artefact_versions DISABLE TRIGGER immutable_versions;
+      ALTER TABLE audit_events DISABLE TRIGGER immutable_audit;
+      DELETE FROM audit_events;
+      DELETE FROM impact_results;
+      DELETE FROM regulatory_changes;
+      DELETE FROM regulatory_updates;
+      -- Repoint each document at version 1 BEFORE deleting later versions: the
+      -- artefact row still references whichever version is current, and the
+      -- foreign key refuses the delete otherwise.
+      UPDATE artefacts a SET current_version_id = v.id, analysis_version_id = v.id
+        FROM artefact_versions v WHERE v.artefact_id = a.id AND v.version = 1;
+      DELETE FROM artefact_segments
+        WHERE version_id IN (SELECT id FROM artefact_versions WHERE version > 1);
+      DELETE FROM artefact_versions WHERE version > 1;
+      UPDATE artefact_versions SET status = 'CURRENT' WHERE version = 1;
+      ALTER TABLE artefact_versions ENABLE TRIGGER immutable_versions;
+      ALTER TABLE audit_events ENABLE TRIGGER immutable_audit;
+    `);
+    return counts;
   });
 
   const { rows } = await pool.query(`SELECT a.name,
