@@ -260,3 +260,25 @@ test('a drafted text patch is marked unverified, editable as prose, and rewrites
   assert.ok(approved.version.raw_text.includes(rewritten));
   assert.equal(approved.impact.resolution,'ACCEPTED');
 });
+
+test('a clause already stating the new value is current, even when it carries a qualifier', async t => {
+  const h = await harness(t);
+  // A qualifier normally sends a claim to legal review. It must not do so when
+  // the clause already says what the update requires: there is nothing for a
+  // reviewer to assess, and asking them to is noise that hides real findings.
+  const text = 'The statutory retirement age is 64, unless the employee is medically unfit.';
+  const app = createApp({ pool: h.pool,secret,extractor: async () => [{ ...baseRule(text),value: 64 }] });
+  const api = (method,url) => request(app)[method](url).auth(signToken('1',secret),{ type: 'bearer' });
+  const buffer = await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph(text)] }] }));
+  const artefact = (await api('post','/api/artefacts').field('type','handbook').attach('file',buffer,'compliant.docx').expect(201)).body;
+
+  const update = (await api('post','/api/regulatory-updates').send(payload).expect(201)).body;
+  await api('post',`/api/regulatory-updates/${update.id}/analyse`).expect(200);
+  const impacts = (await api('get',`/api/impacts?update_id=${update.id}`).expect(200)).body;
+  const mine = impacts.filter(i => String(i.artefact_id) === String(artefact.id));
+  assert.ok(mine.length,'the clause should be matched at all');
+  for (const impact of mine) {
+    assert.equal(impact.system_status,'CURRENT',impact.explanation);
+    assert.equal(impact.proposed_patch,null);
+  }
+});

@@ -35,6 +35,15 @@ function classify(candidate) {
   if (!presentRules.length) return { suppressed: 'HISTORICAL' };
   const rule = presentRules[0];
   const result = (status, explanation, patch = null) => ({ status, explanation, patch, rule });
+  // A claim that already states the new value needs nothing done to it, and
+  // that is true regardless of qualifiers, conditions or a stale version -
+  // none of which can make a compliant clause non-compliant. Checking this
+  // first stops the reviewer being asked to assess wording that already
+  // matches the update.
+  if (rule.value != null && change.new_value != null
+      && Number(rule.value) === Number(change.new_value) && rule.unit === change.unit) {
+    return result('CURRENT', `The clause already states ${change.new_value} ${change.unit}, which is what the update requires.`);
+  }
   if (String(segment.current_version_id) !== String(segment.version_id)) {
     return result('LEGAL_REVIEW_REQUIRED', 'This artefact has an approved version that has not been re-extracted. A new regulatory change requires a fresh legal assessment.');
   }
