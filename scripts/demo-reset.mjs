@@ -15,14 +15,14 @@ const KEEP = process.argv.includes('--keep');
 // The two domains the demo covers. Each amendment is uploaded live on stage,
 // so only the firm's own documents are seeded here.
 const OLD_DOCUMENTS = [
-  ['Employment Law Samples/EXECUTIVE EMPLOYMENT AGREEMENT Old.docx', 'template'],
-  ['Employment Law Samples/JUNIOR STAFF EMPLOYMENT AGREEMENT Old.docx', 'template'],
-  ['Employment Law Samples/INTERNAL PRACTICE PLAYBOOK Old.docx', 'playbook'],
-  ['sample dataset (cybersec)/01_Cloud_IT_Outsourcing_Agreement.docx', 'template'],
-  ['sample dataset (cybersec)/02_Cybersecurity_Compliance_Manual.docx', 'handbook'],
-  ['sample dataset (cybersec)/03_Cloud_IT_Vendor_Due_Diligence_Checklist.docx', 'checklist'],
+  ['EXECUTIVE EMPLOYMENT AGREEMENT.docx', 'template'],
+  ['JUNIOR STAFF EMPLOYMENT AGREEMENT.docx', 'template'],
+  ['INTERNAL PRACTICE PLAYBOOK.docx', 'playbook'],
+  ['Cloud IT Outsourcing Agreement.docx', 'template'],
+  ['Cybersecurity Compliance Manual.docx', 'handbook'],
+  ['Cloud IT Vendor Due Diligence Checklist.docx', 'checklist'],
 ];
-const DIR = new URL('../data/', import.meta.url);
+const DIR = new URL('../data/firm-documents/', import.meta.url);
 
 /** Removes an artefact and everything hanging off it, for a re-ingest. */
 async function discard(pool, id) {
@@ -98,8 +98,8 @@ try {
   }
 
   console.log('\nReady. Sign in, show the six documents unflagged, then upload an amendment:');
-  console.log('  employment    data/Employment Law Samples/Restraint of Trade change in law.docx');
-  console.log('  cybersecurity fixtures/regulatory/sg-cybersecurity-amendment-2024.json (POST /api/regulatory-updates)');
+  console.log('  data/amendments/1 - Restraint of Trade (MoneySmart 2024).docx');
+  console.log('  data/amendments/2 - Cybersecurity Audit Deadline (Act 19 of 2024).docx');
 } finally {
   await pool.end();
 }
