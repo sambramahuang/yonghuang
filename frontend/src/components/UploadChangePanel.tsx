@@ -470,7 +470,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
         <button
           type="button"
           onClick={handleUpload}
-          disabled={(mode === "document" ? files.length === 0 : !file) || busy}
+          disabled={files.length === 0 || busy}
           className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-paper hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy && <Loader2 size={15} className="animate-spin" />}
