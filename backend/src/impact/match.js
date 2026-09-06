@@ -4,14 +4,21 @@ import { requiresLegalReview } from './boundary.js';
 import { proposePatch } from './patch.js';
 import { proposeExplanation, proposeTextPatch } from './draft.js';
 
-// One candidate query: structured concept matching plus alias AND literal-old-value fallback.
-// Aliases intentionally contain stems (e.g. re-employ); literal matching uses numeric boundaries.
-export const candidateQuery = `
+// One candidate query, built for either direction: a new regulatory change
+// scanning every existing segment (changesFilter='c.update_id=$1'), or a
+// newly ingested segment scanning every change already on file
+// (segmentsFilter='s.version_id=$1'). Structured concept matching plus alias
+// AND literal-old-value fallback either way. Aliases intentionally contain
+// stems (e.g. re-employ); literal matching uses numeric boundaries.
+function buildCandidateQuery(changesFilter, segmentsFilter) {
+  return `
 WITH changes AS (
- SELECT c.*,v.aliases,v.direction FROM regulatory_changes c JOIN concepts v ON v.id=c.concept WHERE c.update_id=$1
+ SELECT c.*,u.title AS update_title,v.aliases,v.direction FROM regulatory_changes c
+ JOIN concepts v ON v.id=c.concept JOIN regulatory_updates u ON u.id=c.update_id WHERE ${changesFilter}
 ), segments AS (
  SELECT s.*,a.name,a.id AS artefact_id,a.current_version_id,v.raw_text FROM artefact_segments s
  JOIN artefacts a ON a.analysis_version_id=s.version_id JOIN artefact_versions v ON v.id=s.version_id
+ WHERE ${segmentsFilter}
 )
 SELECT c.id AS change_id,s.id AS segment_id,'STRUCTURED' AS tier,
  to_jsonb(c) AS change,to_jsonb(s) AS segment,r.rules
@@ -27,6 +34,14 @@ WHERE NOT EXISTS(SELECT 1 FROM internal_rules r WHERE r.segment_id=s.id AND r.co
  AND EXISTS(SELECT 1 FROM regexp_matches(s.text,'(?<![[:alnum:]_.,+-])([0-9]+(?:,[0-9]{3})*(?:[.][0-9]+)?)(?![[:alnum:]_,]|[.][0-9])','g') AS token
    WHERE replace(token[1],',','')::numeric=c.old_value)
 `;
+}
+
+export const candidateQuery = buildCandidateQuery('c.update_id=$1', 'true');
+// The mirror direction: a just-ingested segment against every change already
+// on file (past or present effective date), so a newly authored clause that
+// already contradicts a known regulatory position is caught on arrival,
+// rather than only whenever the next update happens to touch that concept.
+export const newArtefactCandidateQuery = buildCandidateQuery('u.effective_date<=$2', 's.version_id=$1');
 
 function classify(candidate) {
   const { change, segment } = candidate;
@@ -57,45 +72,73 @@ function classify(candidate) {
   return result('UPDATE_NEEDED', `The present statement of law says ${rule.value} ${rule.unit}; the supplied update changes it to ${change.new_value} ${change.unit}.`, patch);
 }
 
+// Shared by both directions: classify each candidate, draft where the
+// boundary allows it, and write the finding. `update` is only used to give
+// the drafter a title; each direction supplies it differently since
+// analyseNewArtefact's candidates can span more than one regulatory update.
+async function createFindings(db, candidates, drafter, updateFor) {
+  let created = 0;
+  const not_actioned = [];
+  for (const candidate of candidates) {
+    const { change } = candidate;
+    const verdict = classify(candidate);
+    if (verdict.suppressed) {
+      not_actioned.push({ segment_id: candidate.segment_id, artefact_id: candidate.segment.artefact_id,
+        name: candidate.segment.name, locator: candidate.segment.locator, text: candidate.segment.text, reason: verdict.suppressed });
+      continue;
+    }
+    // Drafting runs outside the deterministic path: a failure or refusal
+    // simply leaves the finding without a patch.
+    if (verdict.draftable && drafter) {
+      const segmentRef = { ...candidate.segment, id: candidate.segment_id, version_id: candidate.segment.version_id };
+      const update = updateFor(candidate);
+      if (!verdict.patch) {
+        verdict.patch = await proposeTextPatch({ segment: segmentRef, change, update, drafter });
+      }
+      // The generic boundary sentence says WHY a human is needed in the
+      // abstract; a reviewer needs to know what THIS clause says and how
+      // the update bears on it. A decline or error leaves classify()'s
+      // explanation in place rather than blocking the finding.
+      const explanation = await proposeExplanation({ segment: segmentRef, change, update, drafter });
+      if (explanation) verdict.explanation = explanation;
+    }
+    const inserted = await db.query(`INSERT INTO impact_results(change_id,segment_id,rule_id,evidence_tier,system_status,explanation,proposed_patch)
+      VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(change_id,segment_id) DO NOTHING RETURNING id`,
+    [candidate.change_id,candidate.segment_id,verdict.rule?.id ?? null,candidate.tier,verdict.status,verdict.explanation,verdict.patch]);
+    created += inserted.rowCount;
+  }
+  return { created, not_actioned };
+}
+
 export async function analyse(pool, updateId, today = new Date().toISOString().slice(0,10), drafter = null) {
   return transaction(pool, async db => {
     const update = (await db.query('SELECT *,effective_date::text AS date FROM regulatory_updates WHERE id=$1 FOR UPDATE', [updateId])).rows[0];
     ensure(update, 404, 'Regulatory update not found');
     ensure(update.date <= today, 409, 'Future-effective updates can be stored, but analysis is deferred until their effective date');
     const { rows: candidates } = await db.query(candidateQuery, [updateId]);
-    let created = 0;
-    const not_actioned = [];
-    for (const candidate of candidates) {
-      const { change } = candidate;
-      const verdict = classify(candidate);
-      if (verdict.suppressed) {
-        not_actioned.push({ segment_id: candidate.segment_id, artefact_id: candidate.segment.artefact_id,
-          name: candidate.segment.name, locator: candidate.segment.locator, text: candidate.segment.text, reason: verdict.suppressed });
-        continue;
-      }
-      // Drafting runs outside the deterministic path: a failure or refusal
-      // simply leaves the finding without a patch.
-      if (verdict.draftable && drafter) {
-        const segmentRef = { ...candidate.segment, id: candidate.segment_id, version_id: candidate.segment.version_id };
-        if (!verdict.patch) {
-          verdict.patch = await proposeTextPatch({ segment: segmentRef, change, update, drafter });
-        }
-        // The generic boundary sentence says WHY a human is needed in the
-        // abstract; a reviewer needs to know what THIS clause says and how
-        // the update bears on it. A decline or error leaves classify()'s
-        // explanation in place rather than blocking the finding.
-        const explanation = await proposeExplanation({ segment: segmentRef, change, update, drafter });
-        if (explanation) verdict.explanation = explanation;
-      }
-      const inserted = await db.query(`INSERT INTO impact_results(change_id,segment_id,rule_id,evidence_tier,system_status,explanation,proposed_patch)
-        VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(change_id,segment_id) DO NOTHING RETURNING id`,
-      [candidate.change_id,candidate.segment_id,verdict.rule?.id ?? null,candidate.tier,verdict.status,verdict.explanation,verdict.patch]);
-      created += inserted.rowCount;
-    }
+    const { created, not_actioned } = await createFindings(db, candidates, drafter, () => update);
     const gaps = (await db.query(`SELECT c.id AS change_id,c.concept FROM regulatory_changes c
       WHERE c.update_id=$1 AND c.change_type='DUTY_ADDED' AND NOT EXISTS(
         SELECT 1 FROM internal_rules r JOIN artefact_segments s ON s.id=r.segment_id
         JOIN artefacts a ON a.analysis_version_id=s.version_id WHERE r.concept=c.concept)`, [updateId])).rows;
     return { update_id: updateId, created, not_actioned, gaps: gaps.map(g => ({ ...g, system_status: 'POSSIBLE_IMPACT', explanation: 'No internal structured claim addresses the new duty. Manual gap assessment required.' })) };
+  });
+}
+
+/**
+ * The other direction: a newly ingested artefact version checked against
+ * every regulatory change already on file, instead of a new change checked
+ * against every existing segment. Same classify/boundary/patch pipeline, so
+ * a document drafted today that already states a stale figure is flagged the
+ * moment it enters the system — waiting on the same reviewer/approver
+ * workflow as any other finding, never written or corrected automatically.
+ *
+ * No `gaps` here: a DUTY_ADDED gap means no artefact anywhere addresses a new
+ * duty, which one freshly ingested artefact cannot resolve either way.
+ */
+export async function analyseNewArtefact(pool, versionId, today = new Date().toISOString().slice(0,10), drafter = null) {
+  return transaction(pool, async db => {
+    const { rows: candidates } = await db.query(newArtefactCandidateQuery, [versionId, today]);
+    return createFindings(db, candidates, drafter, candidate => ({ title: candidate.change.update_title }));
   });
 }

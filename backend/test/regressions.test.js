@@ -9,7 +9,7 @@ import { ingest } from '../src/ingest/index.js';
 import { intake } from '../src/regulatory/intake.js';
 import { analyse } from '../src/impact/match.js';
 import { editPatch, submit, approve } from '../src/workflow/review.js';
-import { listImpacts } from '../src/queries.js';
+import { artefactDetail, listImpacts } from '../src/queries.js';
 import { Document, Packer, Paragraph } from 'docx';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -105,4 +105,32 @@ test('UTF-16 offsets remain correct through DOCX extraction and approval',async 
   const s = await submit(db,i.id,reviewer,{ revision: i.revision });
   const result = await approve(db,i.id,approver,{ revision: s.revision });
   assert.ok(result.version.raw_text.includes('😀 The statutory retirement age is 64.'));
+});
+test('a document ingested after the amendment already exists is flagged immediately, without a manual analyse',async t => {
+  const db = await dbFor(t);
+  const stale = () => [{
+    concept: 'retirement_age',modality: 'IS',operator: '=',value: 63,unit: 'years',assertion_type: 'STATES_LAW',temporal_frame: 'PRESENT',
+    applies_to_condition: null,evidence_quote: 'The retirement age is 63.',extraction_confidence: 'HIGH',
+  }];
+  const buffer = await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph('The retirement age is 63.')] }] }));
+  // Document A predates the amendment: ingesting it now finds nothing to check against yet.
+  const a = await ingest(db,{ buffer,name: 'doc-a.docx',type: 'handbook',userId: reviewer.id,extractor: stale });
+  assert.equal(a.findings_created,0);
+  const u = await intake(db,payload);
+  await analyse(db,u.id);
+  const afterAmendment = await listImpacts(db,{});
+  assert.equal(afterAmendment.length,1);
+  assert.equal(afterAmendment[0].name,'doc-a.docx');
+  // Document B is ingested only now, after the amendment is already on file.
+  // Its ingest call must catch the same stale claim on its own — no separate analyse().
+  const b = await ingest(db,{ buffer,name: 'doc-b.docx',type: 'template',userId: reviewer.id,extractor: stale });
+  assert.equal(b.findings_created,1);
+  const impacts = await listImpacts(db,{});
+  assert.equal(impacts.length,2);
+  const flaggedB = impacts.find(i => i.name === 'doc-b.docx');
+  assert.equal(flaggedB.system_status,'UPDATE_NEEDED');
+  assert.ok(flaggedB.proposed_patch);
+  // The finding is only proposed, never applied: B's own text is untouched.
+  const detail = await artefactDetail(db,b.id);
+  assert.ok(detail.current_version.raw_text.includes('63'));
 });
