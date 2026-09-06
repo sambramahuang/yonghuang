@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, FileText, FileUp, Gavel, Loader2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Gavel, Loader2, UploadCloud, X } from "lucide-react";
 import { useState } from "react";
 import { api, ApiError } from "../api/client";
 
@@ -51,6 +51,9 @@ export default function UploadChangePanel({ onIngested }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [docResults, setDocResults] = useState<DocumentResult[] | null>(null);
   const [lawResult, setLawResult] = useState<LawResult | null>(null);
+  // A batch of amendments: several notices often land together, and uploading
+  // them one at a time hides which of them actually changed anything.
+  const [lawResults, setLawResults] = useState<{ name: string; result?: LawResult; error?: string }[] | null>(null);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -59,15 +62,12 @@ export default function UploadChangePanel({ onIngested }: Props) {
     setError(null);
     setDocResults(null);
     setLawResult(null);
+    setLawResults(null);
   }
 
   function addFiles(incoming: FileList | File[]) {
     const list = Array.from(incoming);
     if (!list.length) return;
-    if (mode === "law") {
-      setFile(list[0]);
-      return;
-    }
     // Dropping or browsing again adds to the queue rather than replacing it,
     // so a batch can be built up from several drags/selections.
     setFiles((prev) => {
@@ -84,15 +84,27 @@ export default function UploadChangePanel({ onIngested }: Props) {
     setBusy(true);
     setError(null);
     if (mode === "law") {
-      if (!file) { setBusy(false); return; }
-      try {
-        setLawResult(await api.uploadRegulatoryChange(file));
-        onIngested();
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Could not upload this document");
-      } finally {
-        setBusy(false);
+      const batch = files.length ? files : file ? [file] : [];
+      if (!batch.length) { setBusy(false); return; }
+      // Sequential for the same reason as documents: each notice is read by a
+      // model and then analysed against the whole corpus. One bad notice must
+      // not stop the rest.
+      setProgress({ done: 0, total: batch.length });
+      const collected: { name: string; result?: LawResult; error?: string }[] = [];
+      for (const f of batch) {
+        try {
+          collected.push({ name: f.name, result: await api.uploadRegulatoryChange(f) });
+        } catch (e) {
+          collected.push({ name: f.name, error: e instanceof ApiError ? e.message : "Could not read this document" });
+        }
+        setProgress((prev) => (prev ? { ...prev, done: prev.done + 1 } : prev));
       }
+      setProgress(null);
+      // One notice keeps the existing detailed view; several get a summary.
+      if (collected.length === 1 && collected[0].result) setLawResult(collected[0].result);
+      else setLawResults(collected);
+      onIngested();
+      setBusy(false);
       return;
     }
 
@@ -125,6 +137,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
     setError(null);
     setDocResults(null);
     setLawResult(null);
+    setLawResults(null);
   }
 
   if (docResults) {
@@ -181,6 +194,49 @@ export default function UploadChangePanel({ onIngested }: Props) {
             Upload more documents
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (lawResults) {
+    const total = lawResults.reduce((n, r) => n + (r.result?.findings_created ?? 0), 0);
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="font-serif text-lg text-ink">
+            {lawResults.length} change{lawResults.length === 1 ? "" : "s"} in law read
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            {total
+              ? `${total} finding${total === 1 ? "" : "s"} raised across the corpus.`
+              : "None of these changes affected a document in the corpus."}
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {lawResults.map((r) => (
+            <li key={r.name} className="rounded-xl border border-line bg-surface p-3.5">
+              <p className="text-sm font-semibold text-ink">{r.result?.title ?? r.name}</p>
+              {r.error ? (
+                <p className="mt-1 text-xs text-bad">{r.error}</p>
+              ) : (
+                <p className="mt-1 text-xs text-ink-soft">
+                  {r.result?.changes_found ?? 0} change{r.result?.changes_found === 1 ? "" : "s"} read
+                  {r.result?.deferred_until
+                    ? ` — takes effect ${r.result.deferred_until}, not yet analysed`
+                    : ` — ${r.result?.findings_created ?? 0} finding${r.result?.findings_created === 1 ? "" : "s"}`}
+                  {r.result && !r.result.created && " (already logged)"}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-2"
+        >
+          Upload more
+        </button>
       </div>
     );
   }
@@ -340,7 +396,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
       >
         <input
           type="file"
-          multiple={mode === "document"}
+          multiple
           accept={DROPZONE_ACCEPT[mode]}
           className="hidden"
           onChange={(e) => {
@@ -348,26 +404,18 @@ export default function UploadChangePanel({ onIngested }: Props) {
             e.target.value = "";
           }}
         />
-        {mode === "law" && file ? (
-          <>
-            <FileUp size={22} className="text-ink-soft" />
-            <p className="mt-2.5 text-sm font-medium text-ink">{file.name}</p>
-            <p className="mt-0.5 text-xs text-ink-faint">Attached — click to replace</p>
-          </>
-        ) : (
-          <>
+        <>
             <UploadCloud size={22} className="text-ink-faint" />
             <p className="mt-2.5 text-sm font-medium text-ink">
-              {mode === "document" ? "Drop DOCX, PDF, or JSON files here" : "Drop a DOCX or PDF file here"}
+              {mode === "document" ? "Drop DOCX, PDF, or JSON files here" : "Drop DOCX or PDF notices here"}
             </p>
             <p className="mt-0.5 text-xs text-ink-faint">
-              {mode === "document" ? "or click to browse — select or drop as many as you like" : "or click to browse"}
+              or click to browse — select or drop as many as you like
             </p>
-          </>
-        )}
+        </>
       </label>
 
-      {mode === "document" && files.length > 0 && (
+      {files.length > 0 && (
         <div className="rounded-2xl border border-line bg-surface p-4 shadow-sm">
           <p className="text-xs font-semibold text-ink-soft">
             {files.length} file{files.length !== 1 ? "s" : ""} queued
