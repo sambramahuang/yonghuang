@@ -148,8 +148,16 @@ export const api = {
       changes_found: number;
       unmapped: { change_type: string; source_span: string }[];
       findings_created?: number;
-      not_actioned?: unknown[];
-      gaps?: unknown[];
+      // Shapes match what analyse() returns in backend/src/impact/match.js.
+      not_actioned?: {
+        segment_id: number;
+        artefact_id: number;
+        name: string;
+        locator: string;
+        text: string;
+        reason: string;
+      }[];
+      gaps?: { change_id: number; concept: string; system_status: string; explanation: string }[];
       message?: string;
     }>("/regulatory-updates/upload", form);
   },

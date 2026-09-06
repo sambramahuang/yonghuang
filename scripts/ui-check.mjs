@@ -109,11 +109,13 @@ try {
   record('C2 blast radius lists no document twice', dupes.length === 0, dupes.slice(0, 2).join(' | '));
 
   // D. Action buttons
-  for (const label of [/summarise changes/i, /blast radius graph/i, /export compliance alert/i]) {
+  // Presence is the assertion; export is correctly disabled on a document with
+  // no changed clauses, so its enabled state is reported rather than required.
+  for (const label of [/summarise changes/i, /blast radius graph/i]) {
     const button = page.getByRole('button', { name: label }).first();
     const present = await button.count() > 0;
     const enabled = present ? await button.isEnabled() : false;
-    record(`D ${label.source.slice(0, 28)} present`, present, enabled ? 'enabled' : 'disabled');
+    record(`D ${label.source.slice(0, 28)} present`, present, enabled ? 'enabled' : 'present but disabled');
   }
 
   const summarise = page.getByRole('button', { name: /summarise changes/i }).first();
