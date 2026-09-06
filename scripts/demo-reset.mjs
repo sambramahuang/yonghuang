@@ -12,12 +12,17 @@ import { ingest } from '../backend/src/ingest/index.js';
 import { fixtureExtractor, liveExtractor, fixtureDiscoverer, liveDiscoverer } from '../backend/src/extract/providers.js';
 
 const KEEP = process.argv.includes('--keep');
-const DIR = new URL('../data/Notice Period Samples/', import.meta.url);
+// The two domains the demo covers. Each amendment is uploaded live on stage,
+// so only the firm's own documents are seeded here.
 const OLD_DOCUMENTS = [
-  ['SENIOR ASSOCIATE EMPLOYMENT AGREEMENT.docx', 'template'],
-  ['STANDARD OFFER LETTER TEMPLATE.docx', 'template'],
-  ['HR TERMINATION AND OFFBOARDING PLAYBOOK.docx', 'playbook'],
+  ['Employment Law Samples/EXECUTIVE EMPLOYMENT AGREEMENT Old.docx', 'template'],
+  ['Employment Law Samples/JUNIOR STAFF EMPLOYMENT AGREEMENT Old.docx', 'template'],
+  ['Employment Law Samples/INTERNAL PRACTICE PLAYBOOK Old.docx', 'playbook'],
+  ['sample dataset (cybersec)/01_Cloud_IT_Outsourcing_Agreement.docx', 'template'],
+  ['sample dataset (cybersec)/02_Cybersecurity_Compliance_Manual.docx', 'handbook'],
+  ['sample dataset (cybersec)/03_Cloud_IT_Vendor_Due_Diligence_Checklist.docx', 'checklist'],
 ];
+const DIR = new URL('../data/', import.meta.url);
 
 /** Removes an artefact and everything hanging off it, for a re-ingest. */
 async function discard(pool, id) {
@@ -75,7 +80,7 @@ try {
     ).then(r => r.rows[0].n);
 
     for (const [name, type] of OLD_DOCUMENTS) {
-      const buffer = await readFile(new URL(name, DIR));
+      const buffer = await readFile(new URL(encodeURI(name), DIR));
       // Extraction still fails occasionally against a live provider, and a
       // document that yields nothing produces no finding when the amendment
       // lands. Re-ingest rather than open the demo a finding short.
@@ -85,14 +90,16 @@ try {
         if (artefact) await discard(pool, artefact.id);
         artefact = await ingest(pool, { buffer, name, type, userId: reviewer.id, extractor, discoverer });
         rules = await countRules(artefact.id);
-        if (rules === 0 && attempt < 3) console.log(`  ${name} extracted nothing — retrying`);
+        if (rules === 0 && attempt < 3) console.log(`  ${name.split('/').pop()} extracted nothing — retrying`);
       }
-      console.log(`  ingested ${name} — ${rules} rule${rules === 1 ? '' : 's'}${rules === 0 ? '  (WARNING: will not flag)' : ''}`);
+      const label = name.split('/').pop();
+      console.log(`  ingested ${label} — ${rules} rule${rules === 1 ? '' : 's'}${rules === 0 ? '  (no quantitative rule; may still match lexically)' : ''}`);
     }
   }
 
-  console.log('\nReady. In the app: sign in, show the documents unflagged, then upload');
-  console.log('an amendment from data/Notice Period Samples/ and analyse.');
+  console.log('\nReady. Sign in, show the six documents unflagged, then upload an amendment:');
+  console.log('  employment    data/Employment Law Samples/Restraint of Trade change in law.docx');
+  console.log('  cybersecurity fixtures/regulatory/sg-cybersecurity-amendment-2024.json (POST /api/regulatory-updates)');
 } finally {
   await pool.end();
 }

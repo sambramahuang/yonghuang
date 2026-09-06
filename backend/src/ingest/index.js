@@ -12,7 +12,7 @@ export async function ingest(pool, { buffer, name, type, userId, extractor, disc
   name = path.basename(name ?? '');
   const extension = path.extname(name).toLowerCase();
   ensure(['.json','.docx','.pdf'].includes(extension), 415, 'Only DOCX, PDF and JSON files are supported');
-  ensure(['handbook','template','faq','config','training','playbook'].includes(type), 400, 'Unsupported artefact type');
+  ensure(['handbook','template','faq','config','training','playbook','checklist','advisory'].includes(type), 400, 'Unsupported artefact type');
   ensure(buffer?.length > 0 && buffer.length <= 5 * 1024 * 1024, 413, 'Upload must contain 1 byte to 5 MB');
   const format = extension === '.json' ? 'JSON' : extension === '.pdf' ? 'PDF' : 'DOCX';
   const parsed = format === 'JSON' ? parseJson(buffer) : format === 'PDF' ? await parsePdf(buffer) : await parseDocx(buffer);

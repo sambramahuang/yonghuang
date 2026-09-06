@@ -27,6 +27,7 @@ Use [client/api.js](../client/api.js) from a Vite frontend. Keep `AUTH_SECRET` a
 | GET | `/artefacts/:id/download` | — | Current JSON or normalized `.txt` |
 | GET | `/regulatory-updates` | — | Update list |
 | POST | `/regulatory-updates` | Structured JSON payload | `{id, created}`, 201 or 200 on replay |
+| POST | `/regulatory-updates/upload` | Multipart `file` (DOCX/PDF) | Model-proposed update, re-validated; `{id, created}` |
 | GET | `/regulatory-updates/:id` | — | Update plus changes |
 | POST | `/regulatory-updates/:id/analyse` | No body | `{update_id, created, not_actioned, gaps}` |
 | GET | `/impacts` | Optional `update_id`, `status`, `open=true` | Flat finding list |
@@ -34,12 +35,13 @@ Use [client/api.js](../client/api.js) from a Vite frontend. Keep `AUTH_SECRET` a
 | PATCH | `/impacts/:id/patch` | `{revision, new: "64"}` | Updated finding |
 | POST | `/impacts/:id/submit` | `{revision}` | Submitted finding |
 | POST | `/impacts/:id/approve` | `{revision}` | `{impact, version}`; separate APPROVER only |
+| POST | `/impacts/:id/accept` | `{revision}` | Accept an unpatched finding as-is; separate APPROVER only |
 | POST | `/impacts/:id/reject` | `{revision, rejection_reason, note?}` | Resolved finding; APPROVER only |
 | POST | `/impacts/:id/escalate` | `{revision, note?}` | Escalated finding |
 
 Both seeded roles may read, upload, analyse, edit, submit and escalate. Only an APPROVER may reject/approve. An approver cannot approve their own edit or submission; the backend enforces this even if the UI enables the button.
 
-Upload `type`: `handbook`, `template`, `faq`, `config`, `training`. Limits: one DOCX/JSON, 5 MB, 250,000 extracted characters and 500 paragraphs/scalar fields. Extraction is synchronous; show an importing state in live mode. Import summaries include `rule_count`, `segment_count`, `extraction_warnings` (number of failed/unmapped segments), and parser `warnings`.
+Upload `type`: `handbook`, `template`, `faq`, `config`, `training`. Limits: one DOCX/PDF/JSON, 5 MB, 250,000 extracted characters and 500 paragraphs/scalar fields. Extraction is synchronous; show an importing state in live mode. Import summaries include `rule_count`, `segment_count`, `extraction_warnings` (number of failed/unmapped segments), and parser `warnings`.
 
 Rejection reasons: `NOT_APPLICABLE`, `WRONG_MATCH`, `POLICY_EXCEEDS`, `NEEDS_COUNSEL`, `OTHER`. Escalation records `NEEDS_COUNSEL`. `note` has a maximum of 5,000 characters.
 
