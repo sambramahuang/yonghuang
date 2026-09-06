@@ -16,7 +16,28 @@ function locateQuote(text, quote, from = 0) {
 }
 import { validateRulesFor } from './schema.js';
 
+// Text that names a topic or catalogues statutory references rather than
+// stating an obligation. The model is told to skip these, but it sees the
+// surrounding document and does not do so reliably, so the check is here where
+// it is deterministic.
+const HEADING = /^\s*(?:\d+(?:\.\d+)*\.?\s+)?[A-Z][^.!?]{0,60}$/;
+const CITATION_LIST = /\b(?:statutory anchors|drafted against|key statutory|source basis|this precedent (?:is|has been))\b/i;
+
+// A quantity means the line states something, however tersely - a table cell
+// reading "Within 30 days after completion" is a value, not a heading.
+const QUANTITY = /\b\d+\s*(?:hour|day|week|month|year|minute)s?\b/i;
+
+function isNonOperative(text) {
+  const trimmed = String(text).trim();
+  if (QUANTITY.test(trimmed)) return CITATION_LIST.test(trimmed);
+  if (trimmed.length <= 70 && HEADING.test(trimmed)) return true;
+  return CITATION_LIST.test(trimmed);
+}
+
 export async function extractRules(segment, { name, format, extractor, concepts }) {
+  if (format !== 'JSON' && isNonOperative(segment.text)) {
+    return { rules: [], confidence: 'LOW', error: 'Heading or citation list; states no obligation' };
+  }
   const conceptList = [...concepts.values()];
   const validateRules = validateRulesFor(conceptList.map(c => c.id));
   let rules;
@@ -49,6 +70,9 @@ export async function extractRules(segment, { name, format, extractor, concepts 
           (rule.applies_to_condition !== null && (!rule.applies_to_condition || locateQuote(segment.text, rule.applies_to_condition) < 0))) {
         continue;
       }
+      // A rule with a concept but no value states nothing actionable - it is
+      // almost always a heading or a table label naming the topic.
+      if (rule.concept !== null && rule.value === null) continue;
       const { evidence_quote, ...fields } = rule;
       accepted.push({ ...fields, has_qualifier: qualifierPattern.test(segment.text),
         evidence_start: segment.char_start + relative, evidence_end: segment.char_start + relative + quote.length,

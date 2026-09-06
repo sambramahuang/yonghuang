@@ -91,6 +91,12 @@ WHAT NOT TO EMIT
   - Do not emit a rule for a bare number with no legal subject ("clause 63", "Form 63", "page 63").
   - Do not emit a rule you inferred from background knowledge but that the text does not state.
   - Do not normalise, correct or update values. Report what the document says, even if wrong.
+  - Do not emit a rule with no value. A heading such as "4. Material Changes" names a topic; it
+    does not state a claim about it. Return [] for headings, titles and table column labels.
+  - Do not emit a rule from a citation list, source note or bibliography - text that catalogues
+    which sections of an Act a document was drafted against ("Key statutory anchors used are:
+    s 10 ...; ss 16A-16L ..."). Those numbers describe the law's structure, not an obligation
+    this document imposes. Extract only from the clause that actually states the requirement.
 ```
 
 ## User message

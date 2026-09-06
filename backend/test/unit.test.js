@@ -225,3 +225,24 @@ test('evidence matching tolerates punctuation shape without losing offsets', asy
   });
   assert.equal(bogus.rules.length, 0);
 });
+
+test('headings and citation lists never produce a rule', async () => {
+  // The model is told to skip these, but it sees the surrounding document and
+  // does not do so reliably: a section heading became a valueless finding, and
+  // a source-basis footnote listing statutory references was given a verified
+  // patch. Both checks are therefore deterministic.
+  for (const text of [
+    '4. Material Changes',
+    '5. Cybersecurity Incident Management',
+    'Source Basis',
+    'This precedent is drafted against the Cybersecurity Act 2018. Key statutory anchors used are: ss 16A-16L, including the 30-day Commissioner-notification duties at ss 16E(8) and 16J(5).',
+  ]) {
+    const result = await extract([{ ...rule,evidence_quote: text }],text);
+    assert.equal(result.rules.length,0,`should not extract from: ${text.slice(0,50)}`);
+  }
+
+  // A terse table value still states an obligation and must survive.
+  const kept = await extract([{ ...rule,concept: 'retirement_age',value: 30,unit: 'days',
+    evidence_quote: 'Within 30 days after completion' }],'Within 30 days after completion');
+  assert.equal(kept.rules.length,1,'a table value is not a heading');
+});
