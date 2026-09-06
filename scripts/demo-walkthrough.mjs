@@ -18,7 +18,11 @@ import { fileURLToPath } from 'node:url';
 const BASE = process.env.UI_BASE ?? 'http://localhost:5173';
 const API = process.env.API_BASE ?? 'http://127.0.0.1:3001/api';
 const SHOTS = process.env.UI_SHOTS ?? '/tmp/demo-shots';
-const AMENDMENT = fileURLToPath(new URL('../data/Notice Period Samples/Minimum Notice Period increase (effective now).docx', import.meta.url));
+// Both amendments, in the order the demo uploads them.
+const AMENDMENTS = [
+  '1 - Restraint of Trade (MoneySmart 2024).docx',
+  '2 - Cybersecurity Audit Deadline (Act 19 of 2024).docx',
+].map(name => fileURLToPath(new URL(`../data/amendments/${name}`, import.meta.url)));
 
 const steps = [];
 const step = (name, ok, detail = '') => {
@@ -86,19 +90,32 @@ try {
   step('1e a document opens in full', paragraphs > 5, `${paragraphs} paragraphs`);
   await page.screenshot({ path: `${SHOTS}/2-document-before.png` });
 
-  // ---- Act 2: the amendment lands ----
-  const form = new FormData();
-  form.append('file', new File([await readFile(AMENDMENT)], 'amendment.docx'));
-  const upload = await (await fetch(`${API}/regulatory-updates/upload`, {
-    method: 'POST', headers: { Authorization: `Bearer ${reviewer}` }, body: form,
-  })).json();
-  step('2a the amendment is read and stored', upload.created === true, upload.error ?? `update ${upload.update_id}`);
-  step('2b a change was extracted from it', upload.changes_found > 0, `${upload.changes_found} change(s)`);
-  step('2c multiple documents are flagged at once', (upload.findings_created ?? 0) >= 2, `${upload.findings_created} findings`);
+  // ---- Act 2: the amendments land ----
+  const uploads = [];
+  for (const path of AMENDMENTS) {
+    const form = new FormData();
+    form.append('file', new File([await readFile(path)], path.split('/').pop()));
+    uploads.push(await (await fetch(`${API}/regulatory-updates/upload`, {
+      method: 'POST', headers: { Authorization: `Bearer ${reviewer}` }, body: form,
+    })).json());
+  }
+  step('2a both amendments are read and stored', uploads.every(u => u.created === true),
+    uploads.map(u => u.error ?? `update ${u.update_id}`).join('; '));
+  step('2b a change was extracted from each', uploads.every(u => u.changes_found > 0),
+    uploads.map(u => `${u.changes_found}`).join(' + ') + ' change(s)');
+  const totalFindings = uploads.reduce((n, u) => n + (u.findings_created ?? 0), 0);
+  step('2c multiple documents are flagged at once', totalFindings >= 4, `${totalFindings} findings`);
 
   const after = await get('/impacts', reviewer);
   const affected = new Set(after.map(i => i.name));
-  step('2d findings span several documents', affected.size >= 2, [...affected].map(n => n.slice(0, 22)).join(', '));
+  step('2d findings span several documents', affected.size >= 3, [...affected].map(n => n.slice(0, 22)).join(', '));
+
+  // Documents a change does not touch must stay clean; that restraint is the
+  // point of the demo as much as the flagging is.
+  const untouched = ['JUNIOR STAFF', 'Vendor Due Diligence'];
+  step('2g unaffected documents stay clean',
+    untouched.every(name => ![...affected].some(a => a.includes(name))),
+    [...affected].join(', '));
 
   // Explanations must describe the clause, not recite boundary categories.
   const boilerplate = after.filter(i => /crosses the competence boundary/.test(i.explanation));
