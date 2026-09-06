@@ -32,7 +32,10 @@ function LawyerApp() {
   // every actual permission (upload, submit, approve) is granted by the
   // signed-in user's real backend capability, which the server enforces
   // independently regardless of what this dropdown says.
-  const canUpload = user?.capability === "REVIEWER";
+  // An approver is the senior role and the backend grants it every reviewer
+  // permission (see requireCapability); hiding upload from them contradicted
+  // the server, which accepts the request.
+  const canUpload = user?.capability === "REVIEWER" || user?.capability === "APPROVER";
   const canApprove = user?.capability === "APPROVER";
   // A reviewer's step is submitting a drafted edit for someone else to approve.
   const canSubmit = user?.capability === "REVIEWER";
