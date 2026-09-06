@@ -95,14 +95,14 @@ function PaperClause({
   // rejected, and a flag with nothing to apply is confirmed as read or dismissed.
   const unresolved = !!change && !change.resolution && clause.status === "change";
   const decidable = unresolved && canApprove;
-  // A drafted edit has to be submitted by someone other than the approver, so
-  // the reviewer gets that step and the approver is held until it lands.
+  // A drafted edit still needs submitting before it can be approved, but an
+  // approver need not wait for someone else to do it: accepting submits and
+  // approves in one step.
   const needsSubmission = unresolved && change?.awaitingSubmission === true;
   const submittable = needsSubmission && canSubmit;
-  // Whoever can currently act on this clause — the reviewer before
-  // submission, the approver after — may also rewrite the machine's draft
-  // before deciding, so a bad first draft is never the final word.
-  const editable = unresolved && change?.hasPatch && (needsSubmission ? canSubmit : canApprove);
+  // Anyone who can act on this clause may rewrite the machine's draft first, so
+  // a bad first draft is never the final word.
+  const editable = unresolved && change?.hasPatch && (canSubmit || canApprove);
   // In a reviewer's document-wide edit session, every clause they could type
   // into opens immediately — no separate "Edit" click to discover it first.
   const forceOpen = editMode && editable && canSubmit;
@@ -146,10 +146,10 @@ function PaperClause({
             <span className="inline-flex items-center gap-1.5">
               <button
                 type="button"
-                disabled={busy || needsSubmission}
+                disabled={busy}
                 title={
                   needsSubmission
-                    ? "A reviewer must submit this edit before an approver can accept it"
+                    ? "Accepting submits this edit and approves it in one step"
                     : undefined
                 }
                 onClick={() => onResolve(clause.id, "accept")}
@@ -165,9 +165,7 @@ function PaperClause({
               >
                 <X size={10} /> Reject
               </button>
-              {needsSubmission && (
-                <span className="text-ink-faint italic">awaiting a reviewer&rsquo;s submission</span>
-              )}
+
             </span>
           )}
           {editable && !rejecting && !editing && (
