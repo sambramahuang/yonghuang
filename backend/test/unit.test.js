@@ -199,3 +199,29 @@ test('regulatory extraction Responses adapter sends strict structured output for
   assert.equal(request.text.format.strict,true);
   assert.deepEqual(request.text.format.schema.properties.changes.items.properties.concept.enum,['notice_period_months',null]);
 });
+
+test('evidence matching tolerates punctuation shape without losing offsets', async () => {
+  // Word writes a typographic apostrophe; a model reproducing the clause
+  // faithfully may return the ASCII form. Discarding the rule over that costs a
+  // correct finding, so the quote is located through a normalised view.
+  const raw = 'Either party may terminate by giving one (1) month’s notice in writing.';
+  const asciiQuote = "one (1) month's notice";
+  const result = await extractRules(segmentText(raw)[0], {
+    name: 'offer.docx', format: 'DOCX', concepts: seededVocabulary,
+    extractor: async () => [{ ...rule, concept: 'retirement_age', value: 1, unit: 'months',
+      evidence_quote: asciiQuote }],
+  });
+  assert.equal(result.rules.length, 1, 'a punctuation-only difference must not discard the rule');
+
+  // Offsets index the ORIGINAL text, so the stored span is the real clause.
+  const { evidence_start, evidence_end } = result.rules[0];
+  assert.equal(raw.slice(evidence_start, evidence_end).length, asciiQuote.length);
+  assert.match(raw.slice(evidence_start, evidence_end), /one \(1\) month.s notice/);
+
+  // A genuinely absent quote is still rejected.
+  const bogus = await extractRules(segmentText(raw)[0], {
+    name: 'offer.docx', format: 'DOCX', concepts: seededVocabulary,
+    extractor: async () => [{ ...rule, evidence_quote: 'three months notice' }],
+  });
+  assert.equal(bogus.rules.length, 0);
+});

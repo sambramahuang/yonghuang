@@ -11,13 +11,35 @@ export function fixtureExtractor() {
   };
 }
 
+/**
+ * Retries a provider call a few times with backoff.
+ *
+ * A rate limit or a dropped connection is indistinguishable from "no rule here"
+ * once the error is swallowed, so without this the same document extracts
+ * differently on successive runs.
+ */
+async function withRetry(operation, attempts = 3) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 400 * 2 ** attempt));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export function liveExtractor({ apiKey, model, fetchImpl = fetch }) {
   if (!apiKey || !model) throw new Error('Live extraction requires OPENAI_API_KEY and OPENAI_MODEL');
   const promptFile = readFileSync(new URL('../../prompts/extract-internal-rule.md', import.meta.url), 'utf8');
   const template = promptFile.split('## System prompt')[1].split('```')[1]
     .replace('Return ONLY a JSON array. No prose, no markdown fences.', 'Return a JSON object containing a rules array. No prose, no markdown fences.');
   // The vocabulary is supplied per call: it grows as concepts are discovered.
-  return async (segment, conceptList = vocabulary.concepts) => {
+  return async (segment, conceptList = vocabulary.concepts) => withRetry(async () => {
     const prompt = template.replace('{{CONCEPT_LIST}}', JSON.stringify(conceptList));
     const schema = responseSchemaFor(conceptList.map(c => c.id));
     const response = await fetchImpl('https://api.openai.com/v1/responses', {
@@ -35,7 +57,7 @@ export function liveExtractor({ apiKey, model, fetchImpl = fetch }) {
     const content = (result.output ?? []).filter(item => item.type === 'message').flatMap(item => item.content ?? []);
     if (content.some(item => item.type === 'refusal')) throw new Error('Extraction was refused');
     return JSON.parse(content.filter(item => item.type === 'output_text').map(item => item.text).join('')).rules;
-  };
+  });
 }
 
 /**
