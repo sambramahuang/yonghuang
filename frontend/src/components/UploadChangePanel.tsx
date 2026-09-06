@@ -22,6 +22,7 @@ interface DocumentResult {
   status: "success" | "error";
   segment_count?: number;
   rule_count?: number;
+  findings_created?: number;
   error?: string;
 }
 
@@ -118,7 +119,13 @@ export default function UploadChangePanel({ onIngested }: Props) {
     for (const f of files) {
       try {
         const r = await api.uploadArtefact(f, type);
-        results.push({ name: f.name, status: "success", segment_count: r.segment_count, rule_count: r.rule_count });
+        results.push({
+          name: f.name,
+          status: "success",
+          segment_count: r.segment_count,
+          rule_count: r.rule_count,
+          findings_created: r.findings_created,
+        });
       } catch (e) {
         results.push({ name: f.name, status: "error", error: e instanceof ApiError ? e.message : "Could not ingest this document" });
       }
@@ -171,10 +178,19 @@ export default function UploadChangePanel({ onIngested }: Props) {
                 )}
               </div>
               {r.status === "success" ? (
-                <p className="mt-1 text-ink-faint">
-                  {r.segment_count} segment{r.segment_count !== 1 ? "s" : ""}, {r.rule_count} extracted rule
-                  {r.rule_count !== 1 ? "s" : ""}
-                </p>
+                <>
+                  <p className="mt-1 text-ink-faint">
+                    {r.segment_count} segment{r.segment_count !== 1 ? "s" : ""}, {r.rule_count} extracted rule
+                    {r.rule_count !== 1 ? "s" : ""}
+                  </p>
+                  {!!r.findings_created && (
+                    <p className="mt-1 flex items-center gap-1.5 text-seminal">
+                      <AlertTriangle size={12} className="shrink-0" />
+                      Already conflicts with {r.findings_created} regulatory change{r.findings_created !== 1 ? "s" : ""} on
+                      file — flagged for review now, before it ships to anyone.
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="mt-1 text-bad">{r.error}</p>
               )}
@@ -182,8 +198,9 @@ export default function UploadChangePanel({ onIngested }: Props) {
           ))}
         </ul>
         <p className="mt-4 text-xs text-ink-faint">
-          Ingested documents appear in search now, but show no findings until a regulatory update
-          affecting them has been logged and analysed.
+          Ingested documents appear in search now. Each was also checked against every regulatory
+          change already on file — most show no findings until a future update affects them, but one
+          that already conflicts with an existing change is flagged above, immediately.
         </p>
         <div className="mt-7 flex justify-center gap-3">
           <button
@@ -353,7 +370,7 @@ export default function UploadChangePanel({ onIngested }: Props) {
         <h2 className="font-serif text-2xl font-medium text-ink">Upload</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">
           {mode === "document"
-            ? "Add a firm document — an agreement, playbook, template, or manual — for extraction. It is only flagged once a regulatory update affecting it has been logged and analysed."
+            ? "Add a firm document — an agreement, playbook, template, or manual — for extraction. It's checked immediately against every regulatory change already on file, so a clause already out of date is flagged on arrival rather than waiting for the next update."
             : "Add a judgment, amendment, or circular. The system reads it, matches it against every concept it already tracks, and flags every affected document immediately — no manual entry required."}
         </p>
       </div>

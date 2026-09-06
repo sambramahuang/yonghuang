@@ -7,8 +7,9 @@ import { discoverConcepts } from '../extract/discover.js';
 import { loadConcepts } from '../vocabulary.js';
 import { transaction } from '../db.js';
 import { ensure } from '../errors.js';
+import { analyseNewArtefact } from '../impact/match.js';
 
-export async function ingest(pool, { buffer, name, type, userId, extractor, discoverer = null }) {
+export async function ingest(pool, { buffer, name, type, userId, extractor, discoverer = null, drafter = null }) {
   name = path.basename(name ?? '');
   const extension = path.extname(name).toLowerCase();
   ensure(['.json','.docx','.pdf'].includes(extension), 415, 'Only DOCX, PDF and JSON files are supported');
@@ -61,5 +62,14 @@ export async function ingest(pool, { buffer, name, type, userId, extractor, disc
     return { id: artefact.id, name, format, version_id: version.id, version: 1,
       segment_count: parsed.segments.length, rule_count: results.reduce((n, r) => n + r.rules.length, 0),
       extraction_warnings: results.filter(r => r.error).length, warnings: parsed.warnings };
+  }).then(async result => {
+    // A freshly ingested document is checked against every regulatory change
+    // already on file, not just future ones — so a clause drafted today that
+    // already states a stale figure is flagged the moment it arrives, rather
+    // than waiting on the next regulatory update to happen to touch the same
+    // concept. Same findings table, same reviewer/approver workflow; nothing
+    // here writes or corrects the document itself.
+    const retroactive = await analyseNewArtefact(pool, result.version_id, undefined, drafter);
+    return { ...result, findings_created: retroactive.created, not_actioned: retroactive.not_actioned };
   });
 }

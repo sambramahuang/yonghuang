@@ -54,7 +54,7 @@ export function createApp({ pool, secret, extractor, drafter = null, discoverer 
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 2 } });
   app.post('/api/artefacts',reviewer,upload.single('file'),async (req,res) => {
     ensure(req.file,400,'Attach a DOCX or JSON file in multipart field file');
-    res.status(201).json(await ingest(pool,{ buffer: req.file.buffer,name: req.file.originalname,type: req.body.type,userId: req.user.id,extractor,discoverer }));
+    res.status(201).json(await ingest(pool,{ buffer: req.file.buffer,name: req.file.originalname,type: req.body.type,userId: req.user.id,extractor,discoverer,drafter }));
   });
   app.get('/api/artefacts/:id',async (req,res) => res.json(await artefactDetail(pool,req.params.id)));
   app.get('/api/artefacts/:id/download',async (req,res) => {
