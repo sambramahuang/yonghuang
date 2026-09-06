@@ -18,7 +18,8 @@
     "token": "node --env-file-if-exists=.env scripts/token.js",
     "demo:reset": "node --env-file-if-exists=.env scripts/demo-reset.mjs",
     "demo:check": "node --env-file-if-exists=.env scripts/demo-walkthrough.mjs",
-    "ui:check": "node scripts/ui-check.mjs"
+    "ui:check": "node scripts/ui-check.mjs",
+    "demo:rewind": "node --env-file-if-exists=.env scripts/demo-rewind.mjs"
   },
   "dependencies": {
     "ajv": "^8.17.1",

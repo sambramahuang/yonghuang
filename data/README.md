@@ -28,3 +28,15 @@ Everything not used on stage: spare cybersecurity precedents, the notice-period
 scenario, and the full 84-page Cybersecurity (Amendment) Act. The Act exceeds
 the 500-paragraph ingestion limit, which is why the demo uploads a short notice
 quoting it rather than the Act itself.
+
+## Running the demo repeatedly
+
+`npm run demo:rewind` returns the database to the opening state in seconds:
+findings, regulatory updates and audit rows are cleared, any version an
+approval created is rolled back, and each document points at version 1 again.
+The documents and their extracted rules are untouched, so the same corpus is
+reused take after take.
+
+`npm run demo:reset` is the slower path — it re-ingests every document from
+`firm-documents/`, which costs several minutes of live extraction. Use it only
+when a document's content has changed.
