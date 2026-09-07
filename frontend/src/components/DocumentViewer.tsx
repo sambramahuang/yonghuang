@@ -1,4 +1,4 @@
-import { Download, GitBranch, Maximize2, Minimize2, Pencil, Save, Sparkles } from "lucide-react";
+import { Download, GitBranch, Maximize2, Minimize2, Pencil, Save, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   buildImpactGraphs,
@@ -56,6 +56,16 @@ export default function DocumentViewer({
   const [background, setBackground] = useState(randomBackground);
   const [editMode, setEditMode] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [certifying, setCertifying] = useState(false);
+
+  function saveBlob(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   // The document as it now stands, including any approved edits — what a
   // lawyer takes away once the review is done.
@@ -63,16 +73,26 @@ export default function DocumentViewer({
     setDownloading(true);
     try {
       const { blob, name } = await api.downloadArtefact(doc.id.replace(/^artefact-/, ""));
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = name;
-      link.click();
-      URL.revokeObjectURL(url);
+      saveBlob(blob, name);
     } catch {
       /* the button does nothing rather than breaking the view */
     } finally {
       setDownloading(false);
+    }
+  }
+
+  // A one-click export of the current version's audit trail: which
+  // regulatory changes it was verified against, and who resolved each one —
+  // something a partner can hand straight to a client or regulator.
+  async function handleCertificate() {
+    setCertifying(true);
+    try {
+      const { blob, name } = await api.downloadCertificate(doc.id.replace(/^artefact-/, ""));
+      saveBlob(blob, name);
+    } catch {
+      /* the button does nothing rather than breaking the view */
+    } finally {
+      setCertifying(false);
     }
   }
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -195,6 +215,16 @@ export default function DocumentViewer({
             >
               <Download size={13} />
               {downloading ? "Preparing…" : "Download current version"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCertificate}
+              disabled={certifying}
+              title="Export a compliance certificate: the regulatory changes this version was verified against, and who resolved each one"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ShieldCheck size={13} />
+              {certifying ? "Preparing…" : "Compliance certificate"}
             </button>
             {canSubmit && (
               <button

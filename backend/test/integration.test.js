@@ -83,6 +83,27 @@ test('reviewer edits and submits; separate approver creates immutable version an
   await h.api('post',`/api/impacts/${i.id}/approve`,'approver').send({ revision: submitted.revision }).expect(409);
   assert.equal((await h.api('post',`/api/regulatory-updates/${update.id}/analyse`)).body.created,0);
 });
+test('compliance certificate lists the resolved finding and its audit trail, and is empty for the untouched baseline',async t => {
+  const h = await harness(t); const { impacts } = await h.seed();
+  const i = impacts.find(i => i.name === 'employee-handbook.docx');
+  const baseline = (await h.api('get',`/api/artefacts/${i.artefact_id}/certificate?version=1`).expect(200)).text;
+  assert.match(baseline,/No regulatory changes have been resolved against this version/);
+
+  const edited = (await h.api('patch',`/api/impacts/${i.id}/patch`).send({ revision: 1,new: '64' }).expect(200)).body;
+  const submitted = (await h.api('post',`/api/impacts/${i.id}/submit`).send({ revision: edited.revision }).expect(200)).body;
+  await h.api('post',`/api/impacts/${i.id}/approve`,'approver').send({ revision: submitted.revision }).expect(200);
+
+  const res = await h.api('get',`/api/artefacts/${i.artefact_id}/certificate`).expect(200);
+  assert.match(res.headers['content-disposition'],/certificate\.txt/);
+  assert.match(res.text,/Verified current as of/);
+  assert.match(res.text,/retirement_age/);
+  assert.match(res.text,/PATCH_EDITED/);
+  assert.match(res.text,/SUBMITTED/);
+  assert.match(res.text,/APPROVED/);
+  assert.match(res.text,/Resolved by: .*Daniel Lim/);
+
+  await h.api('get',`/api/artefacts/${i.artefact_id}/certificate?version=99`).expect(404);
+});
 test('approver cannot approve own edit or own submission and DB enforces separation',async t => {
   const h = await harness(t); const { impacts } = await h.seed();
   const i = impacts.find(i => i.proposed_patch);

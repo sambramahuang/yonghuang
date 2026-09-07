@@ -25,6 +25,7 @@ Use [client/api.js](../client/api.js) from a Vite frontend. Keep `AUTH_SECRET` a
 | POST | `/artefacts` | Multipart `file`, `type` | Import summary, 201 |
 | GET | `/artefacts/:id` | — | Current version, all versions, original segments/rules |
 | GET | `/artefacts/:id/download` | — | Current JSON or normalized `.txt` |
+| GET | `/artefacts/:id/certificate` | Optional `version` | Plain-text compliance certificate for that version, `.txt` |
 | GET | `/regulatory-updates` | — | Update list |
 | POST | `/regulatory-updates` | Structured JSON payload | `{id, created}`, 201 or 200 on replay |
 | POST | `/regulatory-updates/upload` | Multipart `file` (DOCX/PDF) | Model-proposed update, re-validated; `{id, created}` |
@@ -44,6 +45,8 @@ Both seeded roles may read, upload, analyse, edit, submit and escalate. Only an 
 Upload `type`: `handbook`, `template`, `faq`, `config`, `training`. Limits: one DOCX/PDF/JSON, 5 MB, 250,000 extracted characters and 500 paragraphs/scalar fields. Extraction is synchronous; show an importing state in live mode. Import summaries include `rule_count`, `segment_count`, `extraction_warnings` (number of failed/unmapped segments), and parser `warnings`.
 
 Rejection reasons: `NOT_APPLICABLE`, `WRONG_MATCH`, `POLICY_EXCEEDS`, `NEEDS_COUNSEL`, `OTHER`. Escalation records `NEEDS_COUNSEL`. `note` has a maximum of 5,000 characters.
+
+The certificate lists every finding resolved (`resolution='ACCEPTED'`) against that version — the regulatory change, its evidence tier, who resolved it, and the full `audit_events` trail for that finding — with no data beyond what those tables already record. A version with nothing resolved against it (e.g. the original upload) certifies as verified with no changes.
 
 ## Dashboard integration
 

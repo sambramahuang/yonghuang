@@ -10,7 +10,8 @@ import { parsePdf } from './ingest/parsers/pdf.js';
 import { intake, intakeFromDocument } from './regulatory/intake.js';
 import { analyse } from './impact/match.js';
 import { editPatch, submit, approve, acceptNoEdit, resolve } from './workflow/review.js';
-import { artefactDetail, impactDetail, listImpacts } from './queries.js';
+import { artefactDetail, impactDetail, listImpacts, certificateForVersion } from './queries.js';
+import { formatCertificate } from './certificate.js';
 
 export function createApp({ pool, secret, extractor, drafter = null, discoverer = null, regulatoryExtractor = null, extractionMode = 'fixture', corsOrigin = 'http://localhost:5173' }) {
   const app = express();
@@ -61,6 +62,15 @@ export function createApp({ pool, secret, extractor, drafter = null, discoverer 
     const artefact = await artefactDetail(pool,req.params.id);
     const filename = artefact.format === 'JSON' ? artefact.name : `${artefact.name.replace(/\.docx$/i,'')}.txt`;
     res.attachment(filename).type(artefact.format === 'JSON' ? 'application/json' : 'text/plain').send(artefact.current_version.raw_text);
+  });
+  // Defaults to the current version; ?version=<n> certifies a past one.
+  // Everything in the certificate is a formatted read of data already on
+  // artefact_versions, impact_results and audit_events — no new logic.
+  app.get('/api/artefacts/:id/certificate',async (req,res) => {
+    ensure(req.query.version === undefined || /^[1-9]\d{0,8}$/.test(req.query.version),400,'version must be a positive integer');
+    const data = await certificateForVersion(pool,req.params.id,req.query.version ? Number(req.query.version) : undefined);
+    const filename = `${data.artefact.name.replace(/\.(docx|json)$/i,'')}-v${data.version.version}-certificate.txt`;
+    res.attachment(filename).type('text/plain').send(formatCertificate(data));
   });
   app.post('/api/regulatory-updates',reviewer,async (req,res) => {
     const result = await intake(pool,req.body); res.status(result.created ? 201 : 200).json(result);

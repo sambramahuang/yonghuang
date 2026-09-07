@@ -23,6 +23,50 @@ export async function impactDetail(pool,id) {
   return { ...row, evidence: { start,end,quote: row.evidence_raw_text.slice(start,end),locator: row.segment.locator,version_id: row.segment.version_id }, audit };
 }
 
+/**
+ * Everything a compliance certificate needs for one artefact version, drawn
+ * straight from data that already exists: the version's own record, and the
+ * findings resolved against it (ACCEPTED is the only resolution that names a
+ * resolving_version_id) with their regulatory source and full audit trail.
+ */
+export async function certificateForVersion(pool,artefactId,versionNumber) {
+  const artefact = (await pool.query('SELECT * FROM artefacts WHERE id=$1', [artefactId])).rows[0];
+  ensure(artefact,404,'Artefact not found');
+  const version = (await pool.query(`SELECT v.*,creator.name AS created_by_name,approver.name AS approved_by_name
+    FROM artefact_versions v JOIN users creator ON creator.id=v.created_by
+    LEFT JOIN users approver ON approver.id=v.approved_by
+    WHERE v.artefact_id=$1 AND v.version=$2`,
+  [artefactId, versionNumber ?? (await pool.query('SELECT version FROM artefact_versions WHERE id=$1', [artefact.current_version_id])).rows[0].version])).rows[0];
+  ensure(version,404,'Version not found');
+
+  const findings = (await pool.query(`SELECT i.id,i.system_status,i.evidence_tier,i.resolved_at,
+      c.concept,c.change_type,c.old_value,c.new_value,c.unit,
+      ru.title AS update_title,ru.provider_ref,ru.effective_date,
+      approver.name AS approved_by_name,resolver.name AS resolved_by_name
+    FROM impact_results i
+    JOIN regulatory_changes c ON c.id=i.change_id
+    JOIN regulatory_updates ru ON ru.id=c.update_id
+    LEFT JOIN users approver ON approver.id=i.approved_by
+    LEFT JOIN users resolver ON resolver.id=i.resolved_by
+    WHERE i.resolving_version_id=$1 AND i.resolution='ACCEPTED'
+    ORDER BY i.id`, [version.id])).rows;
+
+  const events = findings.length ? (await pool.query(`SELECT e.impact_id,e.action,e.created_at,u.name AS actor_name
+    FROM audit_events e JOIN users u ON u.id=e.actor_id
+    WHERE e.impact_id=ANY($1::bigint[]) ORDER BY e.id`, [findings.map(f => f.id)])).rows : [];
+  const auditByImpact = new Map();
+  for (const event of events) {
+    const key = String(event.impact_id);
+    if (!auditByImpact.has(key)) auditByImpact.set(key,[]);
+    auditByImpact.get(key).push(event);
+  }
+
+  const resolvedByNames = [...new Set(findings.flatMap(f => [f.approved_by_name,f.resolved_by_name]).filter(Boolean))];
+  return { artefact,version,
+    findings: findings.map(f => ({ ...f,audit: auditByImpact.get(String(f.id)) ?? [] })),
+    resolved_by_names: resolvedByNames };
+}
+
 export async function listImpacts(pool,query) {
   const statuses = ['CURRENT','UPDATE_NEEDED','POSSIBLE_IMPACT','LEGAL_REVIEW_REQUIRED'];
   ensure(!query.status || statuses.includes(query.status),400,'Invalid status filter');
