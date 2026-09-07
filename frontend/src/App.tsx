@@ -95,7 +95,13 @@ function LawyerApp() {
       } else if (action === "edit") {
         if (text !== undefined) await api.editPatch(id, detail.revision, text);
       } else if (detail.proposed_patch) {
-        await api.approve(id, detail.revision);
+        // Approval requires a submitted patch. An approver holds every reviewer
+        // permission, so accepting an unsubmitted finding submits it on their
+        // behalf rather than making them switch accounts to do it.
+        const ready = detail.workflow_state === "SUBMITTED"
+          ? detail
+          : await api.submit(id, detail.revision);
+        await api.approve(id, ready.revision);
       } else {
         await api.accept(id, detail.revision);
       }

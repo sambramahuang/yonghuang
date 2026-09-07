@@ -104,16 +104,26 @@ test('compliance certificate lists the resolved finding and its audit trail, and
 
   await h.api('get',`/api/artefacts/${i.artefact_id}/certificate?version=99`).expect(404);
 });
-test('approver cannot approve own edit or own submission and DB enforces separation',async t => {
+test('an approver may edit, submit and approve their own wording; a reviewer still cannot approve',async t => {
   const h = await harness(t); const { impacts } = await h.seed();
+  // A senior partner carries the authority to sign off their own revision, so
+  // the whole cycle is theirs to complete.
   const i = impacts.find(i => i.proposed_patch);
   const edited = (await h.api('patch',`/api/impacts/${i.id}/patch`,'approver').send({ revision: 1,new: '64' }).expect(200)).body;
-  const submitted = (await h.api('post',`/api/impacts/${i.id}/submit`).send({ revision: edited.revision }).expect(200)).body;
-  await h.api('post',`/api/impacts/${i.id}/approve`,'approver').send({ revision: submitted.revision }).expect(403);
-  await assert.rejects(h.pool.query('UPDATE impact_results SET approved_by=edited_by WHERE id=$1',[i.id]),/check constraint/);
+  const submitted = (await h.api('post',`/api/impacts/${i.id}/submit`,'approver').send({ revision: edited.revision }).expect(200)).body;
+  const approved = (await h.api('post',`/api/impacts/${i.id}/approve`,'approver').send({ revision: submitted.revision }).expect(200)).body;
+  assert.equal(approved.impact.resolution,'ACCEPTED');
+
+  // The audit trail still answers who did what, even when it was one person.
+  const detail = (await h.api('get',`/api/impacts/${i.id}`).expect(200)).body;
+  const actions = detail.audit.map(e => `${e.action}:${e.actor_name}`);
+  assert.ok(actions.some(a => a.startsWith('PATCH_EDITED')),actions.join(' '));
+  assert.ok(actions.some(a => a.startsWith('APPROVED')),actions.join(' '));
+
+  // Approval remains an APPROVER capability: a reviewer cannot self-approve.
   const other = impacts.find(x => x.proposed_patch && x.id !== i.id);
-  const own = (await h.api('post',`/api/impacts/${other.id}/submit`,'approver').send({ revision: 1 }).expect(200)).body;
-  await h.api('post',`/api/impacts/${other.id}/approve`,'approver').send({ revision: own.revision }).expect(403);
+  const own = (await h.api('post',`/api/impacts/${other.id}/submit`).send({ revision: 1 }).expect(200)).body;
+  await h.api('post',`/api/impacts/${other.id}/approve`).send({ revision: own.revision }).expect(403);
 });
 test('two simultaneous approvals on JSON preserve both values across length-changing edits',async t => {
   const h = await harness(t); const { impacts } = await h.seed();
